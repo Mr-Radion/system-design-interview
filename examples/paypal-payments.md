@@ -19,36 +19,73 @@
 
 ---
 
-## 2. NFR + trade-offs
+## 2. NFR
 
-### Расчёты
+### 2.1 Входные допущения
 
-```
-Tx/month   = 100M × 5 ≈ 500M          Peak TPS ≈ 500M ÷ 30 ÷ 86_400 × 5 ≈ 1_000
-Ledger rows = 2 entries/tx (debit+credit) ≈ 1B rows/мес
-Storage    ≈ 1B × 200 B ≈ 200 GB/мес (ledger only)
-```
+| Параметр | Значение |
+|----------|----------|
+| Accounts | 100M |
+| Tx | 5 / month / account |
+| UC | P2P + merchant checkout |
+| Ledger | double-entry (debit + credit) |
 
-| Блок | ✅ Выбор |
-|------|----------|
-| **Performance** | p99 initiate ≤ 500ms sync · settle async OK ([latency](../trade-offs/constraints/latency-vs-throughput.md)) |
-| Scalability | ledger shard by `account_id` · stateless API ([sharding](../trade-offs/data/sharding-partitioning.md)) |
-| **Consistency** | **CP ledger** · strong balance · eventual между сервисами ([CAP](../trade-offs/architecture/cap-pacelc-distributed.md) · [consistency](../trade-offs/constraints/consistency-as-nfr.md)) |
-| Reliability | RPO ≈ 0 ledger · RTO < 1 min · multi-AZ ([availability](../trade-offs/constraints/availability-slo-rpo-rto.md)) |
-| Observability | saga state, outbox lag, duplicate rate, ledger drift ([observability](../trade-offs/architecture/observability-architecture.md)) |
-| Processing | **orchestration saga** + **outbox** в каждом сервисе ([saga-outbox](../trade-offs/architecture/saga-vs-outbox.md)) |
-| Security | JWT · mTLS internal · PCI scope только PSP adapter ([gateway](../trade-offs/technologies/api-gateways.md)) |
+### 2.2 Capacity
 
-### Infra
+| Метрика | Формула | Результат |
+|---------|---------|-----------|
+| Tx/month | 100M × 5 | **500M** |
+| Peak TPS | 500M ÷ 30 ÷ 86_400 × 5 | **~1_000** |
+| Ledger rows/month | 500M × 2 entries | **~1B** |
+| Storage/month (ledger) | 1B × 200 B | **~200 GB** |
 
-| Компонент | Тех | Размер |
-|-----------|-----|--------|
-| API Gateway | Kong / AWS ALB L7 | ~1K TPS peak |
-| Saga Orchestrator | Temporal | workflow state · timers |
-| Kafka | 5 brokers | saga events · outbox relay |
-| PG Ledger | 4 shards · sync repl | double-entry per shard |
-| Redis | cluster | idempotency keys TTL 72h |
-| PSP Adapter | isolated VPC | Stripe / card network |
+**Вывод:** CP ledger, sync path ≤ 500ms — orchestration + outbox в §6.
+
+### 2.3 CAP / Consistency
+
+| Участок | Требование |
+|---------|------------|
+| баланс / ledger | **strong (CP)** |
+| между сервисами (saga) | eventual |
+
+→ [CAP](../trade-offs/architecture/cap-pacelc-distributed.md) · [consistency](../trade-offs/constraints/consistency-as-nfr.md)
+
+### 2.4 Latency
+
+#### A. Sync — клиент ждёт
+
+| UC | p99 SLO |
+|----|---------|
+| UC1 initiate transfer | ≤ 500ms |
+| UC2 hold funds | ≤ 500ms |
+
+#### B. Async — клиент не ждёт
+
+| Процесс | SLO |
+|---------|-----|
+| settle / PSP capture | ≤ 5s |
+| webhook merchant | секунды OK |
+
+### 2.5 Throughput
+
+Peak ~1_000 TPS · ledger 2× entries = ~2K row writes/s at peak.
+
+### 2.6 Availability
+
+| Параметр | Значение |
+|----------|----------|
+| SLA | 99.99% |
+| RPO ledger | ≈ 0 |
+| RTO | < 1 min |
+
+### 2.7 Observability
+
+| Signal | Зачем |
+|--------|-------|
+| saga state / step lag | stuck payments |
+| outbox lag | lost events |
+| duplicate rate | idempotency health |
+| ledger drift | CP invariant |
 
 ---
 
@@ -62,13 +99,13 @@ Storage    ≈ 1B × 200 B ≈ 200 GB/мес (ledger only)
 | `GET /v1/payments/{id}` | UC4 | read from primary shard |
 | `POST /v1/webhooks/psp` | UC3,4 | dedup by `event_id` |
 
-Протокол: **REST** + JSON ([rest-grpc-graphql](../trade-offs/api/rest-grpc-graphql.md)) · между сервисами — **events** Kafka ([sync-async](../trade-offs/api/sync-async-messaging.md) · [messaging](../trade-offs/architecture/messaging-patterns.md))
+Протокол: **REST** + JSON ([rest-grpc-graphql](../trade-offs/api/rest-grpc-graphql.md)) · между сервисами — **async events** ([sync-async](../trade-offs/api/sync-async-messaging.md))
 
 ---
 
 ## 4. Data
 
-**Ledger PG** — `accounts`, `ledger_entries`, `payments`, `saga_instances` · **Redis** — `idempotency:{key}` · **Outbox** — `outbox_events` в каждой БД сервиса
+**PostgreSQL ledger** — accounts, entries, payments, saga · **cache** — idempotency keys · **outbox table** — в каждой БД сервиса
 
 | Тема | ✅ |
 |------|-----|
@@ -229,6 +266,63 @@ flowchart LR
 | PSP timeout | saga timer → compensate hold · status `FAILED` |
 | Orchestrator down | Temporal восстанавливает workflow · workers idempotent |
 | Split-brain shard | sync repl + fencing · manual playbooks |
+
+---
+
+## 6. Technology choices
+
+### Orchestrator (multi-step saga)
+
+| Вопрос | Если да | Если нет |
+|--------|---------|----------|
+| 4+ шага с таймаутами / compensate? | orchestration (Temporal) | choreography |
+| Compliance / audit trail? | central workflow state | — |
+| **✅ Выбор** | **Temporal** | UC1/UC2 saga, timers, replay |
+
+→ [orchestration](../trade-offs/architecture/orchestration-choreography-saga.md) · [saga-outbox](../trade-offs/architecture/saga-vs-outbox.md)
+
+### Broker (outbox relay + saga events)
+
+| Вопрос | Если да | Если нет |
+|--------|---------|----------|
+| At-least-once + replay? | log (Kafka) | task queue |
+| Outbox poller → many consumers? | pub/sub | point-to-point |
+| **✅ Выбор** | **Kafka** | outbox relay, saga fan-out |
+
+→ [messaging](../trade-offs/architecture/messaging-patterns.md) · [brokers](../trade-offs/technologies/message-brokers.md)
+
+### Ledger DB
+
+| Вопрос | Выбор |
+|--------|-------|
+| ACID + double-entry | PostgreSQL |
+| RPO ≈ 0 | sync / semi-sync replication |
+| ~1K TPS peak | 4 shards `hash(account_id)` |
+
+→ [replication](../trade-offs/data/replication-sync-async.md) · [sharding](../trade-offs/data/sharding-partitioning.md)
+
+### Idempotency store
+
+| Вопрос | Выбор |
+|--------|-------|
+| TTL keys 72h, p99 lookup | Redis |
+| Webhook dedup | UNIQUE index в PG |
+
+→ [idempotency](../trade-offs/api/write-api-idempotency.md)
+
+### Infra
+
+| Компонент | Тех | Размер | Откуда |
+|-----------|-----|--------|--------|
+| Gateway | ALB L7 / Kong | ~1K TPS | §2.5 |
+| Orchestrator | Temporal | workflow state | §2.4 saga steps |
+| Broker | Kafka, 5 brokers | outbox + saga | §6 broker tree |
+| Ledger DB | PG, 4 shards, sync repl | ~200 GB/mo | §2.2 |
+| Idempotency | Redis cluster | TTL 72h | §2.4 sync path |
+| PSP | Stripe / card network | isolated VPC | PCI scope |
+| API | K8s | stateless pods | §2.5 |
+
+Security: JWT · mTLS internal · PCI только PSP adapter → [gateway](../trade-offs/technologies/api-gateways.md)
 
 ---
 

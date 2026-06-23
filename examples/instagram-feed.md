@@ -19,36 +19,72 @@
 
 ---
 
-## 2. NFR + trade-offs
+## 2. NFR
 
-### Расчёты
+### 2.1 Входные допущения
 
-```
-Write RPS = 50M ÷ 5 ÷ 86_400 ≈ 115        Read RPS = 50M × 5 ÷ 86_400 ≈ 2_900
-Write     = 115 × 700 KB ≈ 80 MB/s        Read     = 2_900 × 700 KB × 10 ≈ 20 GB/s
-Storage   = 80 MB/s × 86_400 × 365 ≈ 2.5 TB/год
-```
+| Параметр | Значение |
+|----------|----------|
+| Users | 50M |
+| Posts | 1 / 5 дней / user |
+| Feed reads | 5×/день, 10 постов в ответе |
+| Media/post | ~700 KB (фото) |
+| Geo | нет |
 
-| Блок | ✅ Выбор |
-|------|----------|
-| **Performance** | p99 ≤ 2s · read bottleneck — **CDN** на 20 GB/s media ([CDN](../trade-offs/architecture/cdn-object-storage-pattern.md)) |
-| Scalability | hash-shard PG 8× · async replicas · Redis feed cache ([sharding](../trade-offs/data/sharding-partitioning.md) · [cache](../trade-offs/architecture/caching-patterns.md)) |
-| Consistency | AP лента · CP профиль/подписки ([CAP](../trade-offs/architecture/cap-pacelc-distributed.md)) |
-| Reliability | SLA 99.9% · async fan-out через Kafka ([resilience](../trade-offs/architecture/resilience-backpressure.md)) |
-| Observability | p99 feed, CDN hit rate, Kafka lag ([observability](../trade-offs/architecture/observability-architecture.md)) |
-| Processing | fan-out async · Cron — cleanup stale feed ([batch/stream](../trade-offs/architecture/batch-vs-stream.md)) |
-| Security | JWT · rate limit на gateway ([gateway](../trade-offs/technologies/api-gateways.md)) |
+### 2.2 Capacity
 
-### Infra
+| Метрика | Формула | Результат |
+|---------|---------|-----------|
+| Write RPS | 50M ÷ 5 ÷ 86_400 | **~115** |
+| Read RPS | 50M × 5 ÷ 86_400 | **~2_900** |
+| Write bandwidth | 115 × 700 KB | **~80 MB/s** |
+| Read bandwidth (media) | 2_900 × 10 × 700 KB | **~20 GB/s** ← bottleneck |
+| Storage/год | 80 MB/s × 86_400 × 365 | **~2.5 TB** |
 
-| Компонент | Тех | Размер |
-|-----------|-----|--------|
-| CDN | Cloudflare | ~20 GB/s peak |
-| S3 | Standard | ~2.5 TB/год |
-| Kafka | 3 brokers | fan-out от 115 w/s |
-| Redis | cluster 6 nodes | feed lists · like counters hot keys |
-| PG | 1 primary + 3 replica · **8 shards** | metadata · posts/follows by `user_id` |
-| K8s | API + workers | ~3K read RPS |
+**Вывод:** read bandwidth >> write → edge cache обязателен (§6).
+
+### 2.3 CAP / Consistency
+
+| Участок | Требование |
+|---------|------------|
+| UC2 лента | eventual OK |
+| профиль / follow | strong |
+
+→ [CAP](../trade-offs/architecture/cap-pacelc-distributed.md)
+
+### 2.4 Latency
+
+#### A. Sync — клиент ждёт
+
+| UC | p99 SLO |
+|----|---------|
+| UC1 post | ≤ 2s |
+| UC2 feed | ≤ 2s |
+
+#### B. Async — клиент не ждёт
+
+| Процесс | SLO |
+|---------|-----|
+| fan-out ленты подписчикам | секунды OK |
+
+### 2.5 Throughput
+
+Peak ~115 w/s write · ~2_900 r/s read · burst ×5 на feed в prime time.
+
+### 2.6 Availability
+
+| Параметр | Значение |
+|----------|----------|
+| SLA | 99.9% |
+| RPO ленты | секунды (stale feed OK) |
+
+### 2.7 Observability
+
+| Signal | Зачем |
+|--------|-------|
+| p99 feed | latency SLO |
+| fan-out lag | stale feed |
+| cache hit rate | CDN / feed cache |
 
 ---
 
@@ -61,13 +97,13 @@ Storage   = 80 MB/s × 86_400 × 365 ≈ 2.5 TB/год
 | `get_feed(user_id, offset)` | UC2 | [offset→cursor](../trade-offs/data/pagination-cursor-offset.md) · [push/pull](../trade-offs/api/push-vs-pull-delivery.md) |
 | `subscription(user_id, type)` | UC4 | follow / unfollow |
 
-Протокол: **REST** к клиенту ([rest-grpc-graphql](../trade-offs/api/rest-grpc-graphql.md)) · publish поста → **async** Kafka ([sync-async](../trade-offs/api/sync-async-messaging.md))
+Протокол: **REST** к клиенту ([rest-grpc-graphql](../trade-offs/api/rest-grpc-graphql.md)) · publish поста → **async event** ([sync-async](../trade-offs/api/sync-async-messaging.md))
 
 ---
 
 ## 4. Data
 
-**PG** — users, posts, follows, likes · **Redis** `feed:{user_id}` · **S3** — фото
+**PostgreSQL** — users, posts, follows, likes · **cache** — feed lists · **object store** — фото
 
 | Тема | ✅ |
 |------|-----|
@@ -206,7 +242,61 @@ flowchart LR
 
 фото с CDN, не origin.
 
-**Сбой:** Kafka lag → лента stale; CDN down → fallback signed S3 (медленнее); replica lag → read-after-write miss на своём посте → fallback primary.
+**Сбой:** broker lag → лента stale; CDN down → fallback signed origin (медленнее); replica lag → read-after-write miss на своём посте → fallback primary.
+
+---
+
+## 6. Technology choices
+
+### Broker (post → fan-out)
+
+| Вопрос | Если да | Если нет |
+|--------|---------|----------|
+| N consumers на одно событие? | log / pub-sub | point-to-point queue |
+| Replay / retention нужен? | Kafka | Redis queue / BullMQ |
+| **✅ Выбор** | **Kafka** | 115 w/s fan-out, replay при lag |
+
+→ [messaging](../trade-offs/architecture/messaging-patterns.md) · [brokers](../trade-offs/technologies/message-brokers.md)
+
+### Cache (feed)
+
+| Вопрос | Если да | Если нет |
+|--------|---------|----------|
+| Read >> write? | cache-aside | без cache |
+| Stale ленты OK? | in-memory list | read PG каждый раз |
+| **✅ Выбор** | **Redis cache-aside** | hot ~20% users = ~80% reads |
+
+→ [cache](../trade-offs/architecture/caching-patterns.md)
+
+### Media + CDN
+
+| Вопрос | Выбор |
+|--------|-------|
+| Read media ~20 GB/s из §2.2 | CDN + object storage origin |
+
+→ [CDN](../trade-offs/architecture/cdn-object-storage-pattern.md)
+
+### DB
+
+| Вопрос | Выбор |
+|--------|-------|
+| OLTP + joins + graph follows | PostgreSQL |
+| Scale metadata writes | 8 shards `hash(user_id)` |
+| Read scale feed | 3 async replicas |
+
+→ [sharding](../trade-offs/data/sharding-partitioning.md) · [replication](../trade-offs/data/replication-sync-async.md)
+
+### Infra
+
+| Компонент | Тех | Размер | Откуда |
+|-----------|-----|--------|--------|
+| CDN | Cloudflare | ~20 GB/s peak | §2.2 read media |
+| Object storage | S3 | ~2.5 TB/год | §2.2 storage |
+| Broker | Kafka, 3 brokers | fan-out | §2.2 write RPS |
+| Cache | Redis cluster | feed + likes | §2.5 read-heavy |
+| DB | PG, 8 shards + 3 replica | metadata | §2.2 |
+| API | K8s | ~3K r/s | §2.5 |
+| Gateway | ALB L7 | — | [gateway](../trade-offs/technologies/api-gateways.md) |
 
 ---
 

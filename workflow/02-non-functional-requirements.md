@@ -4,7 +4,9 @@
 
 ## Что фиксируем
 
-Цифры с собеса + **трейдоф** (A / B → **Выбор**). В конце — **таблица Infra**.
+Цифры с собеса + NFR по подсекциям (допущения → capacity → CAP → latency → throughput → availability → observability). **Без имён технологий** — только требования и SLO.
+
+**Infra и деревья решений** — после шага 5 (HLD), см. [example §6](../examples/instagram-feed.md#6-technology-choices).
 
 ## Расчёты
 
@@ -33,18 +35,9 @@ Storage/год = write_Mbps × 86_400 × 365
 
 > **Трейдоф** → **A** / **B** → **✅ Выбор**
 
-## Infra — итоговая таблица
+## Infra — после HLD (шаг 5 → example §6)
 
-| Компонент | Технология | Размер | Откуда |
-|-----------|------------|--------|--------|
-| CDN | Cloudflare / CloudFront | … Gbps | Capacity read |
-| Object storage | S3 | … TB/год | Storage/год |
-| Broker | Kafka | partitions | Write RPS + fan-out |
-| Cache | Redis | … GB | RAM cache |
-| DB | PostgreSQL | … GB | OLTP |
-| API | K8s | N pods | RPS ÷ RPS/pod |
-| Gateway | Envoy / ALB | L7 | — |
-| Monitoring | Prometheus / Datadog | SLO | Observability |
+Дерево решений на каждый класс (broker, cache, DB…) + итоговая таблица с продуктами и sizing. Шаблон — [instagram-feed §6](../examples/instagram-feed.md#6-technology-choices).
 
 ---
 
