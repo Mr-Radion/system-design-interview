@@ -4,9 +4,77 @@
 
 ## Что фиксируем
 
-Цифры с собеса + NFR по подсекциям (допущения → capacity → CAP → latency → throughput → availability → observability). **Без имён технологий** — только требования и SLO.
+Цифры с собеса + NFR **по этапам** (2.1 → 2.7). **Без имён технологий** в §2 — только требования, SLO, failure modes. Trade-off ссылки — **одной строкой в конце подсекции**, не в каждой ячейке.
 
 **Infra и деревья решений** — после шага 5 (HLD), см. [example §6](../examples/instagram-feed.md#6-technology-choices).
+
+## Шаблон §2 (подсекции)
+
+### 2.1 Входные допущения
+
+| Параметр | Значение |
+|----------|----------|
+| … | … |
+
+**Драйвер дизайна:** что из допущений задаёт bottleneck (FR-…).
+
+### 2.2 Capacity
+
+| Метрика | Формула | Результат |
+|---------|---------|-----------|
+| … | … | **…** |
+
+**Вывод:** … → связь с FR-ID и §6.
+
+### 2.3 CAP / Consistency
+
+| Участок | Требование | Почему |
+|---------|------------|--------|
+| … | strong / eventual | 1 фраза |
+
+→ [CAP](../trade-offs/architecture/cap-pacelc-distributed.md)
+
+### 2.4 Latency
+
+#### A. Sync — клиент **ждёт**
+
+| Этап | p50 | p99 |
+|------|-----|-----|
+| … | … | … |
+| **Итого** | … | **≤ SLO** |
+
+#### B. Async — клиент **не ждёт**
+
+| Процесс | E2E SLO | FR |
+|---------|---------|-----|
+| … | … | FR-… |
+
+### 2.5 Throughput
+
+Peak … · burst-сценарий … · headroom ×N (из §2.2).
+
+### 2.6 Availability & Failure modes
+
+| Параметр | Значение |
+|----------|----------|
+| SLA | … |
+| RPO / RTO | … |
+
+| Сбой | Поведение | FR |
+|------|-----------|-----|
+| … | … | FR-… |
+
+### 2.7 Observability
+
+| Метрика | Зачем | FR / NFR |
+|---------|-------|----------|
+| `metric_name` | … | FR-… |
+
+### Traceability (FR → NFR → §6)
+
+| FR | NFR driver | Решение в §6 |
+|----|------------|--------------|
+| FR-… | … | … |
 
 ## Расчёты
 
@@ -53,4 +121,4 @@ Storage/год = write_Mbps × 86_400 × 365
 
 ← [01 — FR](01-functional-requirements.md) · [FRAMEWORK](../FRAMEWORK.md) · [03 — API](03-api-design.md) →
 
-Пример: [instagram-feed.md](../examples/instagram-feed.md) · [vk-social.md](../examples/vk-social.md)
+Примеры: [instagram-feed.md](../examples/instagram-feed.md) · [paypal-payments.md](../examples/paypal-payments.md) · [vk-social.md](../examples/vk-social.md)

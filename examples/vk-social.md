@@ -2,20 +2,40 @@
 
 ← [FRAMEWORK.md](../FRAMEWORK.md) · [instagram-feed.md](instagram-feed.md) · [paypal-payments.md](paypal-payments.md)
 
-**80M DAU · friends + feed + messages + media · p99 read ≤ 1s · messages retention 5 лет**
+**Overview:** social graph + feed + messaging · bottleneck = **18.5K msg w/s + 580 TB retention** → message shards first, feed CDN second
+
+**80M DAU · friends + feed + messages + media · messages retention 5 лет**
 
 ---
 
 ## 1. FR
 
-| UC | Функция |
-|----|---------|
-| UC1 | Профиль, друзья (follow/unfollow) |
-| UC2 | Лента постов друзей |
-| UC3 | Личные сообщения (1:1) |
-| UC4 | Медиа (фото/видео) к постам и сообщениям |
+| ID | Требование | Пояснение |
+|----|------------|-----------|
+| **FR-1** | Profile + follow / unfollow | Strong consistency на graph; unfollow убирает из feed scope |
+| **FR-2** | Feed — посты **только друзей** | Reverse chrono; не global explore |
+| **FR-3** | Send message — **sync ACK**, delivery async | Client получает 200 после append; push — optional |
+| **FR-4** | Message order **per dialog** | Ordering внутри чата; cross-dialog order не гарантируем |
+| **FR-5** | Media attach к post или message | Presigned upload; metadata в PG / message store |
+| **FR-6** | Retention messages **5 лет** | Append-only; TTL или partition drop после 5y |
+| **FR-7** | At-least-once delivery + **dedup** | Duplicate push не показывает два сообщения client-side |
+| **FR-8** | Hot dialog / celebrity messaging | Один dialog_id — высокий write rate; shard hotspot |
+| **FR-9** | WebSocket push optional | Pull `GET /messages/{dialog}` always works |
+| **FR-10** | Feed fan-out async | Как Instagram FR-5; stale feed OK |
+| **FR-11** | **⚠️ Собес:** shard by `dialog_id` vs `user_id` | Locality history read vs balance writes |
 
-`User M──N User (friends) · User 1──M Post · User 1──M Message · Post 1──M Media`
+### UC → FR
+
+| UC | FR |
+|----|-----|
+| UC1 Профиль, друзья | FR-1 |
+| UC2 Лента постов | FR-2, FR-10 |
+| UC3 Личные сообщения | FR-3, FR-4, FR-7, FR-8, FR-9 |
+| UC4 Медиа | FR-5, FR-6 |
+
+**Out of scope:** groups, voice/video calls, E2E encryption, global search
+
+**ER:** User M──N User (friends) · User 1──M Post · User 1──M Message · Post 1──M Media
 
 ---
 
@@ -32,6 +52,8 @@
 | Avg message | 200 B text + 10% with 500 KB media |
 | Retention messages | 5 лет |
 
+**Драйвер дизайна:** FR-6 → 580 TB text storage; FR-8 → hash(dialog_id) sharding.
+
 ### 2.2 Capacity
 
 | Метрика | Формула | Результат |
@@ -43,15 +65,15 @@
 | Message storage 5y | 18_500 × 200B × 86_400 × 365 × 5 | **~580 TB** text |
 | Media storage 5y | 10% × 500KB × msg volume × 5y | **~ petabyte scale** |
 
-**Вывод:** bottleneck — **messages write + storage**, не feed CDN. Graph + messaging shard first.
+**Вывод:** FR-6 → wide-column message store (§6). FR-8 → dialog_id shard, не user_id alone.
 
 ### 2.3 CAP / Consistency
 
-| Участок | Требование |
-|---------|------------|
-| friends / profile | strong |
-| feed timeline | eventual OK |
-| messages delivery | at-least-once, order per dialog |
+| Участок | Требование | Почему |
+|---------|------------|--------|
+| friends / profile | strong | FR-1: graph edge immediate |
+| feed timeline | eventual OK | FR-10: stale секунды OK |
+| messages delivery | at-least-once, order per dialog | FR-4, FR-7: dedup on consumer |
 
 → [CAP](../trade-offs/architecture/cap-pacelc-distributed.md)
 
@@ -59,36 +81,70 @@
 
 #### A. Sync — клиент ждёт
 
-| UC | p99 SLO |
-|----|---------|
-| UC2 feed page | ≤ 1s |
-| UC3 send message | ≤ 500ms ACK |
+**POST /messages (FR-3):**
+
+| Этап | p50 | p99 |
+|------|-----|-----|
+| API + auth | ~15 ms | ~40 ms |
+| Append message shard | ~30 ms | ~120 ms |
+| ACK to client | ~5 ms | ~10 ms |
+| **Итого send** | **~50 ms** | **≤ 500 ms** |
+
+**GET /feed (FR-2):**
+
+| Этап | p50 | p99 |
+|------|-----|-----|
+| Cache hit | ~10 ms | ~30 ms |
+| Cache miss + assemble | ~200 ms | ~800 ms |
+| **Итого feed page** | **~210 ms** | **≤ 1 s** |
 
 #### B. Async — клиент не ждёт
 
-| Процесс | SLO |
-|---------|-----|
-| fan-out feed | секунды OK |
-| media transcode | минуты OK |
+| Процесс | E2E SLO | FR |
+|---------|---------|-----|
+| Push to recipient WebSocket | ≤ 2 s p95 | FR-9 |
+| Fan-out feed on new post | секунды OK | FR-10 |
+| Media transcode | минуты OK | FR-5 |
 
 ### 2.5 Throughput
 
-Peak message ~18.5K w/s · feed read ~7.4K r/s · headroom ×3 на праздники.
+Peak message **~18.5K w/s** · feed read **~7.4K r/s** · burst ×3 holidays · message store headroom ×2.
 
-### 2.6 Availability
+### 2.6 Availability & Failure modes
 
 | Параметр | Значение |
 |----------|----------|
 | SLA | 99.95% |
 | RPO messages | минуты (async repl) |
+| RTO | < 30 min |
+
+| Сбой | Поведение | FR |
+|------|-----------|-----|
+| Hot dialog shard | Rate limit; optional dialog migrate | FR-8 |
+| Message queue lag | Delayed push; pull still works | FR-9 |
+| Media upload fail | Message text saved; media retry | FR-5 |
+| Duplicate delivery | Client dedup by message_id | FR-7 |
+| Shard node down | RF=3 read from replica; brief unavailability | FR-6 |
 
 ### 2.7 Observability
 
-| Signal | Зачем |
-|--------|-------|
-| p99 feed / messages | latency SLO |
-| message queue lag | delivery delay |
-| shard balance | hot user detection |
+| Метрика | Зачем | FR / NFR |
+|---------|-------|----------|
+| `message_send_p99_ms` | Sync ACK SLO | FR-3 |
+| `feed_p99_latency_ms` | Feed SLO | FR-2 |
+| `message_queue_lag_seconds` | Push delay | FR-9 |
+| `dialog_shard_write_rate` | Hot dialog detection | FR-8 |
+| `message_store_disk_used_tb` | FR-6 capacity | FR-6 |
+
+### Traceability (FR → NFR → §6)
+
+| FR | NFR driver | Решение в §6 |
+|----|------------|--------------|
+| FR-6 retention 5y | 580 TB | Scylla / Cassandra, TTL |
+| FR-8 hot dialog | write skew | hash(dialog_id) shards |
+| FR-10 feed | 7.4K r/s read | Redis cache-aside + Kafka fan-out |
+| FR-1 graph | ACID follows | PostgreSQL + read replicas |
+| FR-9 push | async delivery | WebSocket gateway |
 
 ---
 

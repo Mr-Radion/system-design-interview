@@ -2,20 +2,40 @@
 
 ← [FRAMEWORK.md](../FRAMEWORK.md)
 
-**50M users · без geo · latency пост/лента ≤ 2s · 1 пост / 5 дней · лента 5×/день · 10 постов · ~700 KB/пост**
+**Overview:** post → async fan-out → feed cache · read bandwidth ~20 GB/s >> write → CDN + cache-aside обязательны
+
+**50M users · без geo · 1 пост / 5 дней · лента 5×/день · ~700 KB/пост**
 
 ---
 
 ## 1. FR
 
-| UC | Функция |
-|----|---------|
-| UC1 | Загрузка поста (текст ~100 симв. + 1 фото) |
-| UC2 | Лента — обратный хронологический порядок |
-| UC3 | Лайки, комментарии |
-| UC4 | Подписка / отписка |
+| ID | Требование | Пояснение |
+|----|------------|-----------|
+| **FR-1** | User загружает пост (текст ~100 симв. + 1 фото) | Sync ACK после metadata в БД; тело фото — не через API |
+| **FR-2** | Лента подписок — reverse chronological | Пагинация; 10 постов на страницу |
+| **FR-3** | Like / unlike **идемпотентен** | Double-click / retry не создаёт второй like |
+| **FR-4** | Follow / unfollow | Strong consistency на graph edge; unfollow сразу убирает из ленты |
+| **FR-5** | Celebrity fan-out | User с миллионами followers — push в N лент async, не sync в POST |
+| **FR-6** | Stale feed допустим | Лента может отставать на секунды; не financial data |
+| **FR-7** | Duplicate post retry безопасен | Повтор `write_post` с тем же idempotency key → тот же post_id |
+| **FR-8** | Media upload через presigned URL | Client → object storage напрямую; API только metadata + URL |
+| **FR-9** | Read >> write по bandwidth | ~20 GB/s read vs ~80 MB/s write — edge cache не опция, а must |
+| **FR-10** | Комментарии к посту | Append-only; out of MVP depth — только упоминание в ER |
+| **FR-11** | **⚠️ Собес:** pagination и hot user | Уточнить: offset vs cursor; celebrity = отдельный fan-out path |
 
-`User 1──M Post · User M──N User · Post 1──M Like, Comment`
+### UC → FR
+
+| UC | FR |
+|----|-----|
+| UC1 Загрузка поста | FR-1, FR-7, FR-8 |
+| UC2 Лента | FR-2, FR-5, FR-6, FR-9 |
+| UC3 Лайки, комментарии | FR-3, FR-10 |
+| UC4 Подписка | FR-4 |
+
+**Out of scope:** DMs, search по caption, geo feed, semantic «похожие посты», video transcode
+
+**ER:** User 1──M Post · User M──N User · Post 1──M Like, Comment
 
 ---
 
@@ -31,6 +51,8 @@
 | Media/post | ~700 KB (фото) |
 | Geo | нет |
 
+**Драйвер дизайна:** FR-9 — read bandwidth доминирует; FR-5 — fan-out async, не блокирует POST.
+
 ### 2.2 Capacity
 
 | Метрика | Формула | Результат |
@@ -41,14 +63,15 @@
 | Read bandwidth (media) | 2_900 × 10 × 700 KB | **~20 GB/s** ← bottleneck |
 | Storage/год | 80 MB/s × 86_400 × 365 | **~2.5 TB** |
 
-**Вывод:** read bandwidth >> write → edge cache обязателен (§6).
+**Вывод:** FR-9 → CDN + cache-aside (§6). Write RPS низкий — single master OK.
 
 ### 2.3 CAP / Consistency
 
-| Участок | Требование |
-|---------|------------|
-| UC2 лента | eventual OK |
-| профиль / follow | strong |
+| Участок | Требование | Почему |
+|---------|------------|--------|
+| UC2 лента | eventual OK | FR-6: stale секунды не ломают UX |
+| профиль / follow | strong | FR-4: unfollow должен быть немедленным для graph |
+| likes | eventual OK | FR-3: idempotent + write-behind допустим |
 
 → [CAP](../trade-offs/architecture/cap-pacelc-distributed.md)
 
@@ -56,35 +79,69 @@
 
 #### A. Sync — клиент ждёт
 
-| UC | p99 SLO |
-|----|---------|
-| UC1 post | ≤ 2s |
-| UC2 feed | ≤ 2s |
+**GET feed (FR-2):**
+
+| Этап | p50 | p99 |
+|------|-----|-----|
+| CDN (media thumbs) | ~20 ms | ~80 ms |
+| API + auth | ~15 ms | ~40 ms |
+| Feed cache hit | ~5 ms | ~20 ms |
+| Cache miss → replica + assemble | ~150 ms | ~800 ms |
+| **Итого GET feed** | **~190 ms** | **≤ 2 s** |
+
+**POST post (FR-1):**
+
+| Этап | p50 | p99 |
+|------|-----|-----|
+| Metadata write PG | ~80 ms | ~300 ms |
+| Presigned URL issue | ~10 ms | ~30 ms |
+| **Итого POST** | **~90 ms** | **≤ 2 s** |
 
 #### B. Async — клиент не ждёт
 
-| Процесс | SLO |
-|---------|-----|
-| fan-out ленты подписчикам | секунды OK |
+| Процесс | E2E SLO | FR |
+|---------|---------|-----|
+| Fan-out поста в ленты followers | секунды OK | FR-5 |
+| Celebrity fan-out (N > 10K) | минуты OK, pull-on-read fallback | FR-5 |
 
 ### 2.5 Throughput
 
-Peak ~115 w/s write · ~2_900 r/s read · burst ×5 на feed в prime time.
+Peak write ~115 w/s · read ~2_900 r/s · **burst ×5** на feed в prime time (~14.5K r/s) · headroom ×2 на CDN.
 
-### 2.6 Availability
+### 2.6 Availability & Failure modes
 
 | Параметр | Значение |
 |----------|----------|
 | SLA | 99.9% |
 | RPO ленты | секунды (stale feed OK) |
+| RTO | < 15 min |
+
+| Сбой | Поведение | FR |
+|------|-----------|-----|
+| Feed cache down | Fallback PG replica; risk DB overload — circuit breaker | FR-9 |
+| Replica lag | Stale feed, не ошибка | FR-6 |
+| Fan-out queue lag | Delayed feed update | FR-5 |
+| CDN miss storm | Origin bandwidth spike; rate limit | FR-9 |
+| Duplicate like retry | Idempotent — no double count | FR-3 |
 
 ### 2.7 Observability
 
-| Signal | Зачем |
-|--------|-------|
-| p99 feed | latency SLO |
-| fan-out lag | stale feed |
-| cache hit rate | CDN / feed cache |
+| Метрика | Зачем | FR / NFR |
+|---------|-------|----------|
+| `feed_p99_latency_ms` | SLO §2.4 | FR-2 |
+| `feed_cache_hit_rate` | CDN / cache health | FR-9 |
+| `fan_out_lag_seconds` | Stale feed detection | FR-5 |
+| `post_write_p99_ms` | Upload SLO | FR-1 |
+| `cdn_origin_bandwidth_mbps` | Bottleneck alert | FR-9 |
+
+### Traceability (FR → NFR → §6)
+
+| FR | NFR driver | Решение в §6 |
+|----|------------|--------------|
+| FR-5 celebrity | fan-out async | Kafka + feed workers |
+| FR-6 stale OK | read replica | async replication |
+| FR-9 read >> write | 20 GB/s media | CDN + Redis cache-aside |
+| FR-3 like burst | write amplification | write-behind likes |
 
 ---
 

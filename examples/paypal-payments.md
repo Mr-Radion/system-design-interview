@@ -2,20 +2,41 @@
 
 ← [FRAMEWORK.md](../FRAMEWORK.md) · [instagram-feed.md](instagram-feed.md) — read-heavy пример
 
-**100M accounts · P2P + merchant checkout · p99 initiate ≤ 500ms · settle ≤ 5s · SLA 99.99% · RPO ≈ 0 для ledger**
+**Overview:** POST transfer → saga orchestrator → ledger debit/credit · CP ledger, RPO ≈ 0 · outbox + idempotency на каждом слое
+
+**100M accounts · P2P + merchant checkout · p99 initiate ≤ 500ms · settle ≤ 5s · SLA 99.99%**
 
 ---
 
 ## 1. FR
 
-| UC | Функция |
-|----|---------|
-| UC1 | P2P перевод (sender → receiver) |
-| UC2 | Merchant checkout (hold → capture → settle) |
-| UC3 | Top-up / withdraw через PSP |
-| UC4 | Статус платежа · история · webhook merchant |
+| ID | Требование | Пояснение |
+|----|------------|-----------|
+| **FR-1** | P2P перевод sender → receiver | Double-entry: debit sender + credit receiver |
+| **FR-2** | Merchant checkout hold → capture → settle | Двухфазно: hold funds → PSP capture → credit merchant |
+| **FR-3** | Insufficient funds → fail **без partial debit** | Reserve step atomic; нет «списали, но не зачислили» |
+| **FR-4** | **Idempotency-Key** на все POST write | Retry / double-click → тот же `payment_id` |
+| **FR-5** | Webhook PSP dedup по `event_id` | At-least-once callback ≠ double charge |
+| **FR-6** | Duplicate Kafka event ≠ double ledger entry | Consumer dedup table |
+| **FR-7** | PSP timeout → saga **compensate** hold | Release funds + status FAILED; не DELETE, adjusting entry |
+| **FR-8** | Balance read только с **primary** shard | Available funds не с async replica |
+| **FR-9** | Ledger **immutable** — audit trail | Компенсация = обратная TX, не UPDATE balance напрямую |
+| **FR-10** | Top-up / withdraw через PSP — async | Client polls status; webhook завершает |
+| **FR-11** | Payment status + history для merchant | Webhook notify on terminal state |
+| **FR-12** | **⚠️ Собес:** P2P cross-shard + RPO ≈ 0 | Sender/receiver на разных shards; sync repl на ledger |
 
-`Account 1──M Transaction · Payment 1──M LedgerEntry · Merchant 1──M Payment`
+### UC → FR
+
+| UC | FR |
+|----|-----|
+| UC1 P2P перевод | FR-1, FR-3, FR-4, FR-6, FR-7, FR-12 |
+| UC2 Merchant checkout | FR-2, FR-4, FR-7, FR-11 |
+| UC3 Top-up / withdraw | FR-10, FR-5 |
+| UC4 Статус · история · webhook | FR-11, FR-5 |
+
+**Out of scope:** FX conversion, chargeback automation, crypto, multi-currency netting
+
+**ER:** Account 1──M LedgerEntry · Payment 1──M LedgerEntry · Merchant 1──M Payment
 
 ---
 
@@ -30,6 +51,8 @@
 | UC | P2P + merchant checkout |
 | Ledger | double-entry (debit + credit) |
 
+**Драйвер дизайна:** FR-8/FR-9 → CP ledger, sync repl; FR-7 → orchestration + compensate.
+
 ### 2.2 Capacity
 
 | Метрика | Формула | Результат |
@@ -39,14 +62,15 @@
 | Ledger rows/month | 500M × 2 entries | **~1B** |
 | Storage/month (ledger) | 1B × 200 B | **~200 GB** |
 
-**Вывод:** CP ledger, sync path ≤ 500ms — orchestration + outbox в §6.
+**Вывод:** FR-8 → sync path ≤ 500ms, semi-sync repl; FR-12 → saga + 4 shards.
 
 ### 2.3 CAP / Consistency
 
-| Участок | Требование |
-|---------|------------|
-| баланс / ledger | **strong (CP)** |
-| между сервисами (saga) | eventual |
+| Участок | Требование | Почему |
+|---------|------------|--------|
+| баланс / ledger | **strong (CP)** | FR-8, FR-9: деньги не могут «отставать» |
+| между сервисами (saga) | eventual | FR-7: compensate async OK после sync reserve |
+| idempotency store | strong per key | FR-4: dedup до saga start |
 
 → [CAP](../trade-offs/architecture/cap-pacelc-distributed.md) · [consistency](../trade-offs/constraints/consistency-as-nfr.md)
 
@@ -54,23 +78,36 @@
 
 #### A. Sync — клиент ждёт
 
-| UC | p99 SLO |
-|----|---------|
-| UC1 initiate transfer | ≤ 500ms |
-| UC2 hold funds | ≤ 500ms |
+**POST /transfers (FR-1, FR-4):**
+
+| Этап | p50 | p99 |
+|------|-----|-----|
+| API + auth | ~20 ms | ~50 ms |
+| Idempotency lookup | ~3 ms | ~10 ms |
+| Saga start + reserve ledger TX | ~80 ms | ~250 ms |
+| Outbox row same TX | ~5 ms | ~15 ms |
+| **Итого initiate** | **~108 ms** | **≤ 500 ms** |
+
+**POST /payments hold (FR-2):**
+
+| Этап | p50 | p99 |
+|------|-----|-----|
+| Create payment + hold funds | ~100 ms | ~350 ms |
+| **Итого hold** | **~100 ms** | **≤ 500 ms** |
 
 #### B. Async — клиент не ждёт
 
-| Процесс | SLO |
-|---------|-----|
-| settle / PSP capture | ≤ 5s |
-| webhook merchant | секунды OK |
+| Процесс | E2E SLO | FR |
+|---------|---------|-----|
+| Settle / PSP capture | ≤ 5 s p95 | FR-2 |
+| Webhook merchant | секунды OK | FR-11 |
+| Compensate on PSP fail | ≤ 10 s | FR-7 |
 
 ### 2.5 Throughput
 
-Peak ~1_000 TPS · ledger 2× entries = ~2K row writes/s at peak.
+Peak ~1_000 TPS · ledger 2× entries = **~2K row writes/s** · burst ×3 на payday · headroom ×2.
 
-### 2.6 Availability
+### 2.6 Availability & Failure modes
 
 | Параметр | Значение |
 |----------|----------|
@@ -78,14 +115,35 @@ Peak ~1_000 TPS · ledger 2× entries = ~2K row writes/s at peak.
 | RPO ledger | ≈ 0 |
 | RTO | < 1 min |
 
+| Сбой | Поведение | FR |
+|------|-----------|-----|
+| Crash after COMMIT, before publish | Outbox poller догоняет; at-least-once | FR-6 |
+| Duplicate Kafka event | Consumer dedup `event_id`; no double debit | FR-6 |
+| PSP timeout | Saga timer → compensate hold | FR-7 |
+| Orchestrator down | Workflow replay; workers idempotent | FR-4 |
+| Insufficient funds | Fail at reserve; no compensate needed | FR-3 |
+| Split-brain shard | Sync repl + fencing; manual playbook | FR-8 |
+
 ### 2.7 Observability
 
-| Signal | Зачем |
-|--------|-------|
-| saga state / step lag | stuck payments |
-| outbox lag | lost events |
-| duplicate rate | idempotency health |
-| ledger drift | CP invariant |
+| Метрика | Зачем | FR / NFR |
+|---------|-------|----------|
+| `saga_step_lag_seconds` | Stuck payments | FR-7 |
+| `outbox_unpublished_count` | Lost events risk | FR-6 |
+| `idempotency_duplicate_rate` | FR-4 health | FR-4 |
+| `ledger_balance_drift` | CP invariant | FR-9 |
+| `transfer_initiate_p99_ms` | Sync SLO | FR-1 |
+| `psp_callback_dedup_total` | Webhook health | FR-5 |
+
+### Traceability (FR → NFR → §6)
+
+| FR | NFR driver | Решение в §6 |
+|----|------------|--------------|
+| FR-4 idempotency | p99 lookup | Redis TTL 72h |
+| FR-6/FR-7 events | RPO ≈ 0 path | transactional outbox + Kafka |
+| FR-7 compensate | multi-step | Temporal orchestration |
+| FR-8 balance | sync read | PG primary + semi-sync repl |
+| FR-12 cross-shard | 2 shards per P2P | saga coordinates Reserve/Credit |
 
 ---
 
