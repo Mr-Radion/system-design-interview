@@ -1,14 +1,12 @@
-# Шаг 2 — NFR + trade-offs
+# Шаг 2 — NFR (цифры и SLO)
 
 ← [FRAMEWORK](../FRAMEWORK.md)
 
 ## Что фиксируем
 
-Цифры с собеса + NFR **по этапам** (2.1 → 2.7). **Без имён технологий** в §2 — только требования, SLO, failure modes. Trade-off ссылки — **одной строкой в конце подсекции**, не в каждой ячейке.
+**Только цифры и SLO** — без имён технологий, без trade-off решений. Паттерны → [шаг 5](05-architectural-characteristics.md). Infra → [шаг 7](07-technology-choices.md).
 
-**Infra и деревья решений** — после шага 5 (HLD), см. [example §6](../examples/instagram-feed.md#6-technology-choices).
-
-## Шаблон §2 (подсекции)
+## Шаблон §2
 
 ### 2.1 Входные допущения
 
@@ -16,65 +14,51 @@
 |----------|----------|
 | … | … |
 
-**Драйвер дизайна:** что из допущений задаёт bottleneck (FR-…).
+**Драйвер дизайна:** bottleneck → FR-ID (решение в §5).
 
-### 2.2 Capacity
+### 2.2 Предварительные расчёты (Highload)
 
-| Метрика | Формула | Результат |
-|---------|---------|-----------|
-| … | … | **…** |
+| Метрика | Допущение | Формула | Результат | FR |
+|---------|-----------|---------|-----------|-----|
+| **Пользователи** | … | — | … | — |
+| **Частота** | reads/day, writes/day | — | — | FR-… |
+| **RPS read** | users × reads ÷ 86_400 | … | **…** | |
+| **RPS write** | users × writes ÷ 86_400 | … | **…** | |
+| **Объём данных** | row size × volume | … | **…** | |
+| **Bandwidth read** | read × items × size | … | **…** | bottleneck? |
 
-**Вывод:** … → связь с FR-ID и §6.
+**Вывод:** … → §5 / §7.
 
-### 2.3 CAP / Consistency
+### 2.3 SLO и целевые метрики
 
-| Участок | Требование | Почему |
-|---------|------------|--------|
-| … | strong / eventual | 1 фраза |
+| Метрика | Цель | Примечание |
+|---------|------|------------|
+| Latency p50 / p95 / p99 | … | sync path |
+| SLA uptime | … | / month |
+| SLO | 95% requests < … ms | SRE |
+| RPO / RTO | … | для §5 DR |
 
-→ [CAP](../trade-offs/architecture/cap-pacelc-distributed.md)
-
-### 2.4 Latency
-
-#### A. Sync — клиент **ждёт**
+**Latency breakdown (sync):**
 
 | Этап | p50 | p99 |
 |------|-----|-----|
 | … | … | … |
 | **Итого** | … | **≤ SLO** |
 
-#### B. Async — клиент **не ждёт**
+**Async (клиент не ждёт):**
 
 | Процесс | E2E SLO | FR |
 |---------|---------|-----|
-| … | … | FR-… |
 
-### 2.5 Throughput
+### 2.4 Throughput
 
-Peak … · burst-сценарий … · headroom ×N (из §2.2).
+Peak … · burst ×N · headroom (из §2.2).
 
-### 2.6 Availability & Failure modes
+### 2.5 Observability
 
-| Параметр | Значение |
-|----------|----------|
-| SLA | … |
-| RPO / RTO | … |
-
-| Сбой | Поведение | FR |
-|------|-----------|-----|
-| … | … | FR-… |
-
-### 2.7 Observability
-
-| Метрика | Зачем | FR / NFR |
-|---------|-------|----------|
+| Метрика | Зачем | FR |
+|---------|-------|-----|
 | `metric_name` | … | FR-… |
-
-### Traceability (FR → NFR → §6)
-
-| FR | NFR driver | Решение в §6 |
-|----|------------|--------------|
-| FR-… | … | … |
 
 ## Расчёты
 
@@ -96,26 +80,14 @@ Storage/год = write_Mbps × 86_400 × 365
 | Same DC network | ~0.5 ms |
 | Cross-region | ~50–150 ms |
 
-## Чеклист + trade-offs
+## Чеклист NFR → шаг 5
 
-| Блок | Темы | Trade-offs |
-|------|------|------------|
-| **Performance** | Latency SLA · RPS · Capacity · CDN · cost | [latency](../trade-offs/constraints/latency-vs-throughput.md) · [cost](../trade-offs/constraints/performance-vs-cost.md) · [CDN](../trade-offs/architecture/cdn-object-storage-pattern.md) |
-| Scalability | vertical/horizontal · scalability vs perf · autoscaling · cache | [scaling](../trade-offs/constraints/vertical-vs-horizontal-scaling.md) · [scal vs perf](../trade-offs/constraints/scalability-vs-performance.md) · [autoscale](../trade-offs/constraints/autoscaling-vs-fixed-capacity.md) · [cache](../trade-offs/architecture/caching-patterns.md) |
-| Consistency | CAP · PACELC · strong/eventual | [CAP](../trade-offs/architecture/cap-pacelc-distributed.md) · [consistency](../trade-offs/constraints/consistency-as-nfr.md) |
-| Reliability | SLA · RPO/RTO · DR · circuit breaker · backpressure | [SLO/RPO](../trade-offs/constraints/availability-slo-rpo-rto.md) · [DR](../trade-offs/architecture/disaster-recovery-pattern.md) · [resilience](../trade-offs/architecture/resilience-backpressure.md) |
-| Observability | metrics · logs · traces | [observability](../trade-offs/architecture/observability-architecture.md) · [monitoring](../trade-offs/technologies/monitoring-tools.md) |
-| Processing | batch vs stream (Cron) | [batch/stream](../trade-offs/architecture/batch-vs-stream.md) |
-| Security | auth · rate limit · signed URL | [gateway](../trade-offs/technologies/api-gateways.md) |
-| **Infra** | DB · cache · broker · S3 · gateway · LB · monitoring | [meta](../trade-offs/technologies/technology-selection-meta.md) · [DB](../trade-offs/technologies/databases.md) · [cache](../trade-offs/technologies/caches.md) · [broker](../trade-offs/technologies/message-brokers.md) · [S3](../trade-offs/technologies/object-storage.md) · [gateway](../trade-offs/technologies/api-gateways.md) · [LB](../trade-offs/technologies/load-balancers-proxies.md) |
-
-## Формат одной темы
-
-> **Трейдоф** → **A** / **B** → **✅ Выбор**
-
-## Infra — после HLD (шаг 5 → example §6)
-
-Дерево решений на каждый класс (broker, cache, DB…) + итоговая таблица с продуктами и sizing. Шаблон — [instagram-feed §6](../examples/instagram-feed.md#6-technology-choices).
+| Блок §2 | Шаг 5 (архитектура) | Trade-offs |
+|---------|----------------------|------------|
+| RPO/RTO, SLA | Availability, DR | [SLO/RPO](../trade-offs/constraints/availability-slo-rpo-rto.md) · [DR](../trade-offs/architecture/disaster-recovery-pattern.md) |
+| RPS, bandwidth | Scalability | [scaling](../trade-offs/constraints/vertical-vs-horizontal-scaling.md) · [cache](../trade-offs/architecture/caching-patterns.md) |
+| Latency SLO | Caching, async | [latency](../trade-offs/constraints/latency-vs-throughput.md) |
+| Consistency needs | CAP | [CAP](../trade-offs/architecture/cap-pacelc-distributed.md) |
 
 ---
 

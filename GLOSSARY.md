@@ -12,7 +12,8 @@ Bilingual RU/EN — ключевые термины по [47 trade-offs](FRAMEWO
 | Пропускная способность | Throughput | Запросов/сек или bytes/сек | [latency-vs-throughput](trade-offs/constraints/latency-vs-throughput.md) |
 | Производительность vs стоимость | Performance vs cost | Больше железа/реплик = быстрее, но дороже | [performance-vs-cost](trade-offs/constraints/performance-vs-cost.md) |
 | Вертикальное масштабирование | Vertical scaling | Больше CPU/RAM на одной ноде | [vertical-vs-horizontal-scaling](trade-offs/constraints/vertical-vs-horizontal-scaling.md) |
-| Горизонтальное масштабирование | Horizontal scaling | Больше нод + sharding/replication | [vertical-vs-horizontal-scaling](trade-offs/constraints/vertical-vs-horizontal-scaling.md) |
+| Горизонтальное масштабирование | Horizontal scaling | Больше нод: sharding, stateless app + LB, cache — **не DB replication** | [vertical-vs-horizontal-scaling](trade-offs/constraints/vertical-vs-horizontal-scaling.md) |
+| Read offload vs HA replication | Read offload vs HA replication | Replica read — bonus с lag; primary цель repl — failover/DR | [replication-sync-async](trade-offs/data/replication-sync-async.md) |
 | Масштабируемость vs производительность | Scalability vs performance | Добавление нод ≠ линейный выигрыш на одном запросе | [scalability-vs-performance](trade-offs/constraints/scalability-vs-performance.md) |
 | Автоскейлинг | Autoscaling | Elastic capacity по метрикам | [autoscaling-vs-fixed-capacity](trade-offs/constraints/autoscaling-vs-fixed-capacity.md) |
 | Согласованность как NFR | Consistency as NFR | Strong vs eventual — явное требование к операции | [consistency-as-nfr](trade-offs/constraints/consistency-as-nfr.md) |
@@ -73,6 +74,10 @@ Bilingual RU/EN — ключевые термины по [47 trade-offs](FRAMEWO
 | Master-slave | Master-slave / primary-replica | Один writer, N readers | [master-slave-multi-master](trade-offs/data/master-slave-multi-master.md) |
 | Multi-master | Multi-master | Несколько writers, conflict resolution | [master-slave-multi-master](trade-offs/data/master-slave-multi-master.md) |
 | Double-entry ledger | Double-entry bookkeeping | Debit + credit парами | [paypal-payments](examples/paypal-payments.md) |
+| Materialized view | Materialized view | Snapshot тяжёлого запроса; refresh по расписанию | [normalization-denormalization](trade-offs/data/normalization-denormalization.md) |
+| Snowflake ID | Snowflake ID | 64-bit sortable ID (time + region) | [sharding-partitioning](trade-offs/data/sharding-partitioning.md) |
+| ULID | Universally Unique Lexicographically Sortable Identifier | UUID, упорядоченный по времени | [sharding-partitioning](trade-offs/data/sharding-partitioning.md) |
+| Connection pool | Connection pool | PgBouncer, HikariCP — must-have highload | [databases](trade-offs/technologies/databases.md) |
 | Отложенная транзакция | Deferrable transaction | TX может ждать lock (PostgreSQL) | [sql-vs-nosql-paradigm](trade-offs/data/sql-vs-nosql-paradigm.md) |
 
 ---
@@ -131,7 +136,7 @@ Bilingual RU/EN — ключевые термины по [47 trade-offs](FRAMEWO
 
 ---
 
-## Technologies — что выбирать на §6 {#technologies}
+## Technologies — что выбирать на §7 {#technologies}
 
 | Термин RU | EN | Кратко | Trade-off |
 |-----------|-----|--------|-----------|

@@ -8,7 +8,17 @@ related:
 
 # Sync vs Async Replication (синхронная vs асинхронная репликация)
 
-> **Главное:** Replication — sync vs async. Вход — RPO/RTO и availability (шаг 2).
+> **Главное:** Replication — **отказоустойчивость (HA, DR)**, не масштабирование. Sync vs async — по RPO/RTO (шаг 2 → шаг 5).
+
+## Replication ≠ scaling
+
+| Цель | Механизм |
+|------|----------|
+| HA, failover, RPO/RTO | **Replication** (sync / async / semi-sync) |
+| Read throughput, latency | **CDN, cache-aside**, stateless app + LB |
+| Write throughput, storage size | **Sharding**, partition |
+
+Read с replica — **побочный offload** с replication lag, не primary reason для repl.
 
 ## Что определяет выбор
 
@@ -19,7 +29,7 @@ related:
 
 ## Цепочка решений
 
-Шаг 2 NFR → шаг 5 replication pattern → шаг 2 Infra tech
+Шаг 2 NFR (RPO/RTO) → шаг 5 Availability → шаг 7 Infra tech
 
 ## Synchronous Replication
 
@@ -35,7 +45,7 @@ related:
 
 - ➕ **Плюсы:** minimal write latency; master availability; geo-distributed replicas cheap.
 - ➖ **Минусы / Цена:** data loss risk if master dies before replicate; stale reads from replicas (replication lag).
-- 📍 **Где применять:** read scaling (read replicas), analytics replica, cross-region DR (Disaster Recovery, аварийное восстановление).
+- 📍 **Где применять:** DR, failover, cross-region standby, analytics replica (read-only). Optional read offload — с lag.
 
 ## Semi-sync (компромисс)
 

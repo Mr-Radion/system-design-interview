@@ -27,6 +27,6 @@
 
 ---
 
-← [03 — API](03-api-design.md) · [FRAMEWORK](../FRAMEWORK.md) · [05 — HLD](05-high-level-design.md) →
+← [03 — API](03-api-design.md) · [FRAMEWORK](../FRAMEWORK.md) · [05 — Arch](05-architectural-characteristics.md) →
 
 Пример: [instagram-feed.md](../examples/instagram-feed.md)

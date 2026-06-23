@@ -36,6 +36,16 @@ related:
 - ➖ **Минусы / Цена:** redundancy; update propagation (user renamed → millions docs); storage ↑.
 - 📍 **Где применять:** read-heavy feeds, analytics snapshots, embedded comments.
 
+- 📍 **Where:** LAMP stacks, WordPress-scale, HA standby.
+
+## Materialized views
+
+**Gate:** тяжёлая агрегация на каждый read? → MV + periodic refresh (не live JOIN каждый раз).
+
+- ➕ **Плюсы:** precomputed snapshot; быстрый read dashboard/report.
+- ➖ **Минусы:** stale до refresh; storage; invalidation logic.
+- 📍 **Где:** analytics on OLTP без полного ETL pipeline; rating aggregates.
+
 ## Правило
 
 Normalize writes, denormalize reads — частый hybrid (CQRS (Command Query Responsibility Segregation, разделение команд и запросов)-lite).

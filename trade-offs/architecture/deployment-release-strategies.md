@@ -13,7 +13,7 @@ related:
 ## Цепочка решений
 
 ```
-Шаг 2 NFR (availability, release cadence) → stateless? → strategy → L7 LB / K8s §6
+Шаг 5 NFR (availability, release cadence) → stateless? → strategy → L7 LB / K8s §7
 ```
 
 ## Стратегии

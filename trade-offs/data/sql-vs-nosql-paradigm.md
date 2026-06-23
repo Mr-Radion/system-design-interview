@@ -72,7 +72,7 @@ related:
 
 → [GLOSSARY](../../GLOSSARY.md#htap)
 
-**Шаг 4:** выбираем парадигму. Infra → example §6.
+**Шаг 4:** выбираем парадигму. Infra → example §7.
 
 
 ---

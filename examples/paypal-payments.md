@@ -53,30 +53,29 @@
 
 **Драйвер дизайна:** FR-8/FR-9 → CP ledger, sync repl; FR-7 → orchestration + compensate.
 
-### 2.2 Capacity
+### 2.2 Предварительные расчёты
 
-| Метрика | Формула | Результат |
-|---------|---------|-----------|
-| Tx/month | 100M × 5 | **500M** |
-| Peak TPS | 500M ÷ 30 ÷ 86_400 × 5 | **~1_000** |
-| Ledger rows/month | 500M × 2 entries | **~1B** |
-| Storage/month (ledger) | 1B × 200 B | **~200 GB** |
+| Метрика | Допущение | Формула | Результат | FR |
+|---------|-----------|---------|-----------|-----|
+| **Пользователи** | 100M accounts | — | **100M** | — |
+| **Частота** | 5 tx / month / account | — | — | FR-1 |
+| **Peak TPS** | 500M ÷ 30 ÷ 86_400 × 5 | — | **~1_000** | — |
+| **Ledger rows/month** | 500M × 2 entries | — | **~1B** | FR-9 |
+| **Объём данных** | 1B × 200 B | — | **~200 GB/мес** | — |
 
-**Вывод:** FR-8 → sync path ≤ 500ms, semi-sync repl; FR-12 → saga + 4 shards.
+**Вывод:** FR-8/FR-12 → CP ledger, semi-sync repl; saga + 4 shards.
 
-### 2.3 CAP / Consistency
+### 2.3 SLO и целевые метрики
 
-| Участок | Требование | Почему |
-|---------|------------|--------|
-| баланс / ledger | **strong (CP)** | FR-8, FR-9: деньги не могут «отставать» |
-| между сервисами (saga) | eventual | FR-7: compensate async OK после sync reserve |
-| idempotency store | strong per key | FR-4: dedup до saga start |
-
-→ [CAP](../trade-offs/architecture/cap-pacelc-distributed.md) · [consistency](../trade-offs/constraints/consistency-as-nfr.md)
-
-### 2.4 Latency
-
-#### A. Sync — клиент ждёт
+| Метрика | Цель | Примечание |
+|---------|------|------------|
+| Latency initiate p99 | **≤ 500 ms** | POST /transfers |
+| Latency hold p99 | **≤ 500 ms** | merchant |
+| Settle E2E p95 | **≤ 5 s** | async |
+| SLA uptime | **99.99%** | / month |
+| SLO | 95% initiate < 400 ms | SRE |
+| RPO ledger | **≈ 0** | CP |
+| RTO | **< 1 min** | |
 
 **POST /transfers (FR-1, FR-4):**
 
@@ -86,64 +85,28 @@
 | Idempotency lookup | ~3 ms | ~10 ms |
 | Saga start + reserve ledger TX | ~80 ms | ~250 ms |
 | Outbox row same TX | ~5 ms | ~15 ms |
-| **Итого initiate** | **~108 ms** | **≤ 500 ms** |
+| **Итого** | **~108 ms** | **≤ 500 ms** |
 
-**POST /payments hold (FR-2):**
-
-| Этап | p50 | p99 |
-|------|-----|-----|
-| Create payment + hold funds | ~100 ms | ~350 ms |
-| **Итого hold** | **~100 ms** | **≤ 500 ms** |
-
-#### B. Async — клиент не ждёт
+**Async:**
 
 | Процесс | E2E SLO | FR |
 |---------|---------|-----|
 | Settle / PSP capture | ≤ 5 s p95 | FR-2 |
-| Webhook merchant | секунды OK | FR-11 |
 | Compensate on PSP fail | ≤ 10 s | FR-7 |
 
-### 2.5 Throughput
+### 2.4 Throughput
 
-Peak ~1_000 TPS · ledger 2× entries = **~2K row writes/s** · burst ×3 на payday · headroom ×2.
+Peak ~1_000 TPS · ledger **~2K row writes/s** · burst ×3 payday · headroom ×2.
 
-### 2.6 Availability & Failure modes
+### 2.5 Observability
 
-| Параметр | Значение |
-|----------|----------|
-| SLA | 99.99% |
-| RPO ledger | ≈ 0 |
-| RTO | < 1 min |
-
-| Сбой | Поведение | FR |
-|------|-----------|-----|
-| Crash after COMMIT, before publish | Outbox poller догоняет; at-least-once | FR-6 |
-| Duplicate Kafka event | Consumer dedup `event_id`; no double debit | FR-6 |
-| PSP timeout | Saga timer → compensate hold | FR-7 |
-| Orchestrator down | Workflow replay; workers idempotent | FR-4 |
-| Insufficient funds | Fail at reserve; no compensate needed | FR-3 |
-| Split-brain shard | Sync repl + fencing; manual playbook | FR-8 |
-
-### 2.7 Observability
-
-| Метрика | Зачем | FR / NFR |
-|---------|-------|----------|
+| Метрика | Зачем | FR |
+|---------|-------|-----|
 | `saga_step_lag_seconds` | Stuck payments | FR-7 |
 | `outbox_unpublished_count` | Lost events risk | FR-6 |
 | `idempotency_duplicate_rate` | FR-4 health | FR-4 |
 | `ledger_balance_drift` | CP invariant | FR-9 |
 | `transfer_initiate_p99_ms` | Sync SLO | FR-1 |
-| `psp_callback_dedup_total` | Webhook health | FR-5 |
-
-### Traceability (FR → NFR → §6)
-
-| FR | NFR driver | Решение в §6 |
-|----|------------|--------------|
-| FR-4 idempotency | p99 lookup | Redis TTL 72h |
-| FR-6/FR-7 events | RPO ≈ 0 path | transactional outbox + Kafka |
-| FR-7 compensate | multi-step | Temporal orchestration |
-| FR-8 balance | sync read | PG primary + semi-sync repl |
-| FR-12 cross-shard | 2 shards per P2P | saga coordinates Reserve/Credit |
 
 ---
 
@@ -313,7 +276,40 @@ flowchart LR
 
 ---
 
-## 5. HLD
+## 5. Architectural characteristics
+
+| Категория | Характеристика | ✅ Выбор | Trade-off | Почему (FR) |
+|-----------|----------------|----------|-----------|-------------|
+| **Operational** | Availability | semi-sync repl + failover | [replication](../trade-offs/data/replication-sync-async.md) | RPO ≈ 0, **HA** |
+| | Continuity | rolling + saga replay | [deployment](../trade-offs/architecture/deployment-release-strategies.md) | SLA 99.99% |
+| | DR | hot standby ledger | [DR](../trade-offs/architecture/disaster-recovery-pattern.md) | RTO < 1 min |
+| **Structural** | Consistency | CP ledger / eventual saga | [CAP](../trade-offs/architecture/cap-pacelc-distributed.md) | FR-8, FR-9 |
+| | Scalability | 4 shards hash account_id | [sharding](../trade-offs/data/sharding-partitioning.md) | ~1K TPS |
+| | Distributed TX | orchestration saga + outbox | [saga-outbox](../trade-offs/architecture/saga-vs-outbox.md) | FR-7, FR-12 |
+| **Cross-cutting** | Idempotency | 3-layer dedup | [idempotency](../trade-offs/api/write-api-idempotency.md) | FR-4, FR-5, FR-6 |
+
+### Failure modes
+
+| Сбой | Поведение | FR |
+|------|-----------|-----|
+| Crash after COMMIT, before publish | Outbox poller догоняет | FR-6 |
+| Duplicate Kafka event | Consumer dedup `event_id` | FR-6 |
+| PSP timeout | Saga compensate hold | FR-7 |
+| Insufficient funds | Fail at reserve | FR-3 |
+| Split-brain shard | Sync repl + fencing | FR-8 |
+
+### Traceability (FR → §5 → §7)
+
+| FR | Arch choice §5 | Tech §7 |
+|----|----------------|---------|
+| FR-4 idempotency | Redis dedup layer | Redis TTL 72h |
+| FR-6/FR-7 | transactional outbox | Kafka + Temporal |
+| FR-8 balance | semi-sync repl (HA) | PG primary only reads |
+| FR-12 cross-shard | orchestration saga | Temporal + 4 shards |
+
+---
+
+## 6. HLD
 
 **5 сервисов** ([monolith-micro](../trade-offs/architecture/monolith-microservices.md)) · stateless API · **ledger stateful per shard**
 
@@ -445,7 +441,7 @@ flowchart LR
 
 ---
 
-## 6. Technology choices
+## 7. Technology choices
 
 ### Orchestrator (multi-step saga)
 
@@ -492,7 +488,7 @@ flowchart LR
 |-----------|-----|--------|--------|
 | Gateway | ALB L7 / Kong | ~1K TPS | §2.5 |
 | Orchestrator | Temporal | workflow state | §2.4 saga steps |
-| Broker | Kafka, 5 brokers | outbox + saga | §6 broker tree |
+| Broker | Kafka, 5 brokers | outbox + saga | §7 broker tree |
 | Ledger DB | PG, 4 shards, sync repl | ~200 GB/mo | §2.2 |
 | Idempotency | Redis cluster | TTL 72h | §2.4 sync path |
 | PSP | Stripe / card network | isolated VPC | PCI scope |

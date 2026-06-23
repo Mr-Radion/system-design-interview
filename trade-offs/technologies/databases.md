@@ -28,8 +28,10 @@ related:
 - ➖ Single-node write scale limit (before sharding).
 - 📍 **Default choice** for most relational needs.
 
+**Connection pool (highload must-have):** PgBouncer, HikariCP — без pool каждый request = new TCP + auth к PG. Pool size ≈ `(cores × 2) + spindle`, не «1 conn per thread unlimited».
+
 ### MySQL / MariaDB
-- ➕ Wide hosting support, read replicas mature, simpler ops for some.
+- ➕ Wide hosting support, replicas for **HA/DR** mature, simpler ops for some.
 - ➖ Weaker JSON (JavaScript Object Notation)/analytics vs PG; Oracle licensing (MySQL enterprise).
 - 📍 **Where:** LAMP stacks, WordPress-scale, read-heavy replicas.
 

@@ -20,7 +20,7 @@ related:
 
 ## Цепочка решений
 
-Шаг 2 NFR → шаг 5 patterns (cache) → шаг 2 Infra tech (Redis)
+Шаг 2 NFR → шаг 5 Scalability (cache) → шаг 7 Infra tech (Redis)
 
 ## Cache-Aside (Lazy Loading)
 
@@ -61,7 +61,9 @@ related:
 - Mutex/lock on rebuild
 - Pre-warm on deploy
 
-**Шаг 5:** pattern · eviction policy → [cache-eviction-policies](cache-eviction-policies.md) · §6 infra в example.
+**HTTP / CDN:** кэшировать только **idempotent GET/HEAD**; invalidation — ETag, Cache-Control, versioned keys.
+
+**Шаг 5:** pattern · eviction policy → [cache-eviction-policies](cache-eviction-policies.md) · §7 infra в example.
 
 ## Резюме
 

@@ -7,11 +7,12 @@
 | Шаг | Файл |
 |-----|------|
 | 1. Функциональные требования | [workflow/01-functional-requirements.md](workflow/01-functional-requirements.md) |
-| 2. NFR + trade-offs | [workflow/02-non-functional-requirements.md](workflow/02-non-functional-requirements.md) |
+| 2. NFR (цифры и SLO) | [workflow/02-non-functional-requirements.md](workflow/02-non-functional-requirements.md) |
 | 3. API | [workflow/03-api-design.md](workflow/03-api-design.md) |
 | 4. Data model | [workflow/04-data-model.md](workflow/04-data-model.md) |
-| 5. High-Level Design | [workflow/05-high-level-design.md](workflow/05-high-level-design.md) |
-| 6. Technology choices | [examples/instagram-feed.md](examples/instagram-feed.md#6-technology-choices) (в example §6) |
+| 5. Архитектурные характеристики | [workflow/05-architectural-characteristics.md](workflow/05-architectural-characteristics.md) |
+| 6. High-Level Design | [workflow/06-high-level-design.md](workflow/06-high-level-design.md) |
+| 7. Technology choices | [workflow/07-technology-choices.md](workflow/07-technology-choices.md) · [example §7](examples/instagram-feed.md#7-technology-choices) |
 
 ## Пример целиком
 
@@ -19,18 +20,18 @@
 |--------|---------|
 | [instagram-feed.md](examples/instagram-feed.md) | read-heavy · CDN · sharding · cache-aside |
 | [paypal-payments.md](examples/paypal-payments.md) | transactional · **saga** · **outbox** · idempotency |
-| [vk-social.md](examples/vk-social.md) | social graph · messaging · capstone §1–6 |
+| [vk-social.md](examples/vk-social.md) | social graph · messaging · capstone §1–7 |
 
 ## Модули знаний
 
 | Модуль | Workflow | Trade-offs / examples |
 |--------|----------|------------------------|
-| 1. Компоненты | шаг 2, 5 | LB, cache, gateway, observability |
+| 1. Компоненты | шаг 2, 5–6 | LB, cache, gateway, observability |
 | 2. Хранение | шаг 4 | indexing, sql-nosql, norm-denorm |
 | 3. Распределённое | шаг 4–5 | replication, sharding, CAP |
-| 4. Паттерны | шаг 5 | saga, messaging, resilience, deployment |
+| 4. Паттерны | шаг 5–6 | saga, messaging, resilience, deployment |
 | 5–6. Кейсы | examples | instagram, paypal |
-| 7. Capstone | example §1–6 | vk-social |
+| 7. Capstone | example §1–7 | vk-social |
 
 ## Шаблон trade-off
 

@@ -23,11 +23,11 @@ related:
 
 ## Master-Slave (Primary-Replica)
 
-**Выбор:** один writer (master), N read replicas.
+**Выбор:** один writer (master), N replicas для **HA / DR**.
 
-- ➕ **Плюсы:** простая модель; read scale; clear consistency (writes → master); failover to promoted replica.
-- ➖ **Минусы / Цена:** write bottleneck on master; replication lag on reads; failover = brief downtime or manual.
-- 📍 **Где применять:** 90% web apps, read-heavy workloads, PostgreSQL/MySQL standard setup.
+- ➕ **Плюсы:** failover (promoted replica); DR; optional read offload с lag; простая модель (writes → master).
+- ➖ **Минусы / Цена:** write bottleneck on master; replication lag на replica reads; failover = brief downtime или manual.
+- 📍 **Где применять:** 90% web apps — **availability**, не primary read scale. Read throughput → cache/CDN.
 
 ## Multi-Master (Active-Active)
 

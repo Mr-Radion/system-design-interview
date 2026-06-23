@@ -53,33 +53,32 @@
 
 **Драйвер дизайна:** FR-9 — read bandwidth доминирует; FR-5 — fan-out async, не блокирует POST.
 
-### 2.2 Capacity
+### 2.2 Предварительные расчёты
 
-| Метрика | Формула | Результат |
-|---------|---------|-----------|
-| Write RPS | 50M ÷ 5 ÷ 86_400 | **~115** |
-| Read RPS | 50M × 5 ÷ 86_400 | **~2_900** |
-| Write bandwidth | 115 × 700 KB | **~80 MB/s** |
-| Read bandwidth (media) | 2_900 × 10 × 700 KB | **~20 GB/s** ← bottleneck |
-| Storage/год | 80 MB/s × 86_400 × 365 | **~2.5 TB** |
+| Метрика | Допущение | Формула | Результат | FR |
+|---------|-----------|---------|-----------|-----|
+| **Пользователи** | 50M users | — | **50M** | — |
+| **Частота** | 1 post/5d · 5 feed reads/day · 10 posts/response | — | — | FR-1, FR-2 |
+| **RPS write** | 50M ÷ 5 ÷ 86_400 | — | **~115** | — |
+| **RPS read** | 50M × 5 ÷ 86_400 | — | **~2_900** | FR-9 |
+| **Bandwidth write** | 115 × 700 KB | — | **~80 MB/s** | — |
+| **Bandwidth read (media)** | 2_900 × 10 × 700 KB | — | **~20 GB/s** | FR-9 bottleneck |
+| **Объём данных** | write bandwidth × time | 80 MB/s × 86_400 × 365 | **~2.5 TB/год** | — |
 
-**Вывод:** FR-9 → CDN + cache-aside (§6). Write RPS низкий — single master OK.
+**Вывод:** FR-9 → read bandwidth bottleneck → §5 Scalability (CDN+cache); write RPS низкий.
 
-### 2.3 CAP / Consistency
+### 2.3 SLO и целевые метрики
 
-| Участок | Требование | Почему |
-|---------|------------|--------|
-| UC2 лента | eventual OK | FR-6: stale секунды не ломают UX |
-| профиль / follow | strong | FR-4: unfollow должен быть немедленным для graph |
-| likes | eventual OK | FR-3: idempotent + write-behind допустим |
+| Метрика | Цель | Примечание |
+|---------|------|------------|
+| Latency GET feed p50 / p95 / p99 | ~190 ms / ~500 ms / **≤ 2 s** | sync |
+| Latency POST post p99 | **≤ 2 s** | sync |
+| SLA uptime | **99.9%** | / month |
+| SLO | 95% feed requests < 500 ms | SRE |
+| RPO ленты | секунды | stale OK |
+| RTO | < 15 min | |
 
-→ [CAP](../trade-offs/architecture/cap-pacelc-distributed.md)
-
-### 2.4 Latency
-
-#### A. Sync — клиент ждёт
-
-**GET feed (FR-2):**
+**GET feed (FR-2) — breakdown:**
 
 | Этап | p50 | p99 |
 |------|-----|-----|
@@ -87,7 +86,7 @@
 | API + auth | ~15 ms | ~40 ms |
 | Feed cache hit | ~5 ms | ~20 ms |
 | Cache miss → replica + assemble | ~150 ms | ~800 ms |
-| **Итого GET feed** | **~190 ms** | **≤ 2 s** |
+| **Итого** | **~190 ms** | **≤ 2 s** |
 
 **POST post (FR-1):**
 
@@ -95,53 +94,28 @@
 |------|-----|-----|
 | Metadata write PG | ~80 ms | ~300 ms |
 | Presigned URL issue | ~10 ms | ~30 ms |
-| **Итого POST** | **~90 ms** | **≤ 2 s** |
+| **Итого** | **~90 ms** | **≤ 2 s** |
 
-#### B. Async — клиент не ждёт
+**Async — клиент не ждёт:**
 
 | Процесс | E2E SLO | FR |
 |---------|---------|-----|
 | Fan-out поста в ленты followers | секунды OK | FR-5 |
-| Celebrity fan-out (N > 10K) | минуты OK, pull-on-read fallback | FR-5 |
+| Celebrity fan-out (N > 10K) | минуты OK | FR-5 |
 
-### 2.5 Throughput
+### 2.4 Throughput
 
-Peak write ~115 w/s · read ~2_900 r/s · **burst ×5** на feed в prime time (~14.5K r/s) · headroom ×2 на CDN.
+Peak write ~115 w/s · read ~2_900 r/s · **burst ×5** prime time (~14.5K r/s) · headroom ×2 на CDN.
 
-### 2.6 Availability & Failure modes
+### 2.5 Observability
 
-| Параметр | Значение |
-|----------|----------|
-| SLA | 99.9% |
-| RPO ленты | секунды (stale feed OK) |
-| RTO | < 15 min |
-
-| Сбой | Поведение | FR |
-|------|-----------|-----|
-| Feed cache down | Fallback PG replica; risk DB overload — circuit breaker | FR-9 |
-| Replica lag | Stale feed, не ошибка | FR-6 |
-| Fan-out queue lag | Delayed feed update | FR-5 |
-| CDN miss storm | Origin bandwidth spike; rate limit | FR-9 |
-| Duplicate like retry | Idempotent — no double count | FR-3 |
-
-### 2.7 Observability
-
-| Метрика | Зачем | FR / NFR |
-|---------|-------|----------|
-| `feed_p99_latency_ms` | SLO §2.4 | FR-2 |
+| Метрика | Зачем | FR |
+|---------|-------|-----|
+| `feed_p99_latency_ms` | SLO §2.3 | FR-2 |
 | `feed_cache_hit_rate` | CDN / cache health | FR-9 |
 | `fan_out_lag_seconds` | Stale feed detection | FR-5 |
 | `post_write_p99_ms` | Upload SLO | FR-1 |
 | `cdn_origin_bandwidth_mbps` | Bottleneck alert | FR-9 |
-
-### Traceability (FR → NFR → §6)
-
-| FR | NFR driver | Решение в §6 |
-|----|------------|--------------|
-| FR-5 celebrity | fan-out async | Kafka + feed workers |
-| FR-6 stale OK | read replica | async replication |
-| FR-9 read >> write | 20 GB/s media | CDN + Redis cache-aside |
-| FR-3 like burst | write amplification | write-behind likes |
 
 ---
 
@@ -265,7 +239,7 @@ flowchart TB
 
 shard key = `user_id` · celebrity fan-out через Kafka, не scatter-gather → [sharding](../trade-offs/data/sharding-partitioning.md)
 
-### Репликация — master + read replicas
+### Репликация — HA + optional read offload
 
 ```mermaid
 flowchart LR
@@ -307,7 +281,41 @@ follows / profile → **primary** · feed timeline → **replica** (stale ≤ re
 
 ---
 
-## 5. HLD
+## 5. Architectural characteristics
+
+| Категория | Характеристика | ✅ Выбор | Trade-off | Почему (FR) |
+|-----------|----------------|----------|-----------|-------------|
+| **Operational** | Availability | async repl + failover | [replication](../trade-offs/data/replication-sync-async.md) | HA, **не read scale** |
+| | Continuity | rolling deploy | [deployment](../trade-offs/architecture/deployment-release-strategies.md) | SLA 99.9% |
+| | DR | RPO секунды, RTO 15 min | [DR](../trade-offs/architecture/disaster-recovery-pattern.md) | §2.3 |
+| **Structural** | Scalability (read) | CDN + cache-aside | [CDN](../trade-offs/architecture/cdn-object-storage-pattern.md) · [cache](../trade-offs/architecture/caching-patterns.md) | FR-9 20 GB/s |
+| | Scalability (write) | 8 shards hash user_id | [sharding](../trade-offs/data/sharding-partitioning.md) | когда single master не хватит |
+| | Consistency | eventual feed / strong follow | [CAP](../trade-offs/architecture/cap-pacelc-distributed.md) | FR-4, FR-6 |
+| **Cross-cutting** | Caching | cache-aside feed + write-behind likes | [caching-patterns](../trade-offs/architecture/caching-patterns.md) | FR-3, FR-9 |
+| | Messaging | fan-out pub/sub | [messaging](../trade-offs/architecture/messaging-patterns.md) | FR-5 |
+
+### Failure modes
+
+| Сбой | Поведение | FR |
+|------|-----------|-----|
+| Feed cache down | Fallback PG replica; circuit breaker | FR-9 |
+| Replica lag | Stale feed OK | FR-6 |
+| Fan-out queue lag | Delayed feed update | FR-5 |
+| CDN miss storm | Origin spike; rate limit | FR-9 |
+| Duplicate like retry | Idempotent — no double count | FR-3 |
+
+### Traceability (FR → §5 → §7)
+
+| FR | Arch choice §5 | Tech §7 |
+|----|----------------|---------|
+| FR-5 celebrity | async fan-out | Kafka + feed workers |
+| FR-6 stale OK | async repl (HA) + replica read offload | PG replicas |
+| FR-9 read >> write | CDN + cache-aside | CloudFront + Redis |
+| FR-3 like burst | write-behind | Redis buffer |
+
+---
+
+## 6. HLD
 
 **4 сервиса** ([monolith-micro](../trade-offs/architecture/monolith-microservices.md)) · stateless API ([stateless](../trade-offs/architecture/stateless-stateful.md))
 
@@ -335,7 +343,7 @@ flowchart TB
     Cron --> Cleanup[cleanup]
 ```
 
-### Репликация — master + read replicas
+### Репликация — HA + optional read offload
 
 ```mermaid
 flowchart LR
@@ -419,7 +427,7 @@ flowchart LR
 
 ---
 
-## 6. Technology choices
+## 7. Technology choices
 
 ### Broker (post → fan-out)
 
@@ -455,7 +463,7 @@ flowchart LR
 |--------|-------|
 | OLTP + joins + graph follows | PostgreSQL |
 | Scale metadata writes | 8 shards `hash(user_id)` |
-| Read scale feed | 3 async replicas |
+| HA + read offload feed | 3 async replicas (failover; stale reads OK) |
 
 → [sharding](../trade-offs/data/sharding-partitioning.md) · [replication](../trade-offs/data/replication-sync-async.md)
 

@@ -90,12 +90,13 @@ related:
 2. **Hash:** `HASH(user_id) % N` — равномерно, но rebalance при добавлении shard.
 3. **Geographic:** America / Europe shards — latency + compliance, но uneven load.
 
-### Порядок масштабирования (итог Habr)
+### Порядок масштабирования (Highload / Habr)
 
 1. Vertical scaling
 2. Indexing → Partitioning
-3. Master-Slave (reads)
-4. Sharding (writes / size) — **только если всё выше не хватило**
+3. **Replication (HA / DR)** — не «для read scale»
+4. **Cache / CDN (read throughput)**
+5. Sharding (writes / storage) — **только если всё выше не хватило**
 
 **Over-engineering:** при 10K users не шардируйте под 10M.
 
@@ -116,13 +117,23 @@ related:
 | Logical replication | replicate → promote new shard |
 | Mixed | production: read-only + backfill + verify |
 
+## ID strategy (GUID vs Int)
+
+| ID | Плюс | Минус | Когда |
+|----|------|-------|-------|
+| **Int / BigInt** | компактный индекс, sort | конфликты в distributed write | централизованный writer |
+| **UUID** | уникальность без координации | 16 B, random → skew на hash shard | distributed insert |
+| **Snowflake / ULID** | unique + time-order | infra для generator | sharded writes, sortable IDs |
+
+Hot shard на UUID — salting или Snowflake. → [GLOSSARY](../../GLOSSARY.md)
+
 ## Rendezvous hashing
 
 Альтернатива consistent hashing: каждый key → score на каждой ноде; min score wins. Меньше skew при неравномерных weights. → [GLOSSARY](../../GLOSSARY.md#rendezvous-hashing)
 
 ## Резюме
 
-- Сначала vertical → index → **partition** → replica → **shard**.
+- Сначала vertical → index → **partition** → **repl (HA)** → **cache** → **shard**.
 - Partition = один сервер, прозрачный SQL. Shard = разные серверы, app routing.
 - Hash shard — default; range — time queries; geo — compliance.
 - Rebalance — отдельный проект, не «нажал кнопку».
@@ -135,7 +146,8 @@ related:
 | Hot key на hash shard? | Salting, separate hot shard, cache layer. |
 | Cross-shard JOIN? | Избегать; scatter-gather + merge in app. |
 | Consistent vs rendezvous? | Both minimize remapping; rendezvous better for weighted nodes. |
-| Когда НЕ шардировать? | Пока vertical + partition + replica хватает. |
+| Когда НЕ шардировать? | Пока vertical + partition + cache хватает. |
+| Replica для read scale? | **Нет** — replica для HA/DR; read scale → cache/CDN. Offload с replica — bonus с lag. |
 
 **Источник:** [часть 2](https://habr.com/ru/articles/877312/)
 

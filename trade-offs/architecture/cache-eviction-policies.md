@@ -14,7 +14,7 @@ related:
 ## Цепочка решений
 
 ```
-Шаг 2 NFR (latency, read:write) → pattern (aside/through) → eviction policy → Redis/Memcached §6
+Шаг 2 NFR (latency, read:write) → pattern (aside/through) → eviction policy → Redis/Memcached §7
 ```
 
 ## Формула (back-of-envelope)

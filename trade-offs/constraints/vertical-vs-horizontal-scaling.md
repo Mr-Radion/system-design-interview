@@ -17,11 +17,11 @@ related:
 |--------|-------|
 | Нужен boost за день | Vertical |
 | CPU/RAM maxed | Horizontal |
-| Read-heavy | Vertical + read replicas |
+| Read-heavy | CDN + cache-aside ([caching-patterns](../architecture/caching-patterns.md)) |
 
 ## Цепочка решений
 
-Vertical → indexes → partition → replicas → sharding ([sharding](../data/sharding-partitioning.md))
+Vertical → indexes → partition → **replication (HA/DR)** → **cache/CDN (read)** → sharding ([sharding](../data/sharding-partitioning.md))
 
 ## Vertical Scaling (scale-up) vs Horizontal Scaling
 
@@ -39,12 +39,12 @@ Vertical → indexes → partition → replicas → sharding ([sharding](../data
 
 - ➕ **Плюсы:** почти бесконечный scale, fault tolerance, scale отдельных компонентов.
 - ➖ **Минусы / Цена:** stateless requirement, distributed transactions, data sharding, DevOps overhead.
-- 📍 **Где применять:** web tier, read replicas, stateless API (Application Programming Interface, программный интерфейс), Cassandra/DynamoDB.
+- 📍 **Где применять:** stateless API, sharding, cache tier, wide-column DB (Cassandra/DynamoDB).
 
 ## Пример Booking.com
 
 1. **Vertical:** DBMS — больше CPU (Central Processing Unit, процессор), RAM (Random Access Memory, оперативная память), faster disks (immediate boost).
-2. **Vertical limit reached → Horizontal:** read replicas + sharding by region.
+2. **Vertical limit reached → Horizontal:** cache/CDN for reads + sharding by region; replicas for **HA**, not scale.
 3. **Trade-off:** complexity ↑, но load growth продолжается.
 
 ## Чеклист (Checklist) «10x load» (NFR (Non-Functional Requirements, нефункциональные требования) → HLD (High-Level Design, высокоуровневый дизайн)

@@ -1,4 +1,4 @@
-# Шаг 5 — High-Level Design
+# Шаг 6 — High-Level Design
 
 ← [FRAMEWORK](../FRAMEWORK.md)
 
@@ -18,7 +18,7 @@
 
 ## Схема
 
-Шаблон: **trade-offs из шага 4 → выбор → диаграмма** (см. [пример](../examples/instagram-feed.md#5-hld)).
+Шаблон: **§5 arch choices → диаграмма** (см. [пример](../examples/instagram-feed.md#6-hld)).
 
 ### Общая
 
@@ -31,19 +31,12 @@ flowchart LR
     Services --> Queue
 ```
 
-### Data layer (после trade-offs)
-
-| Тема | Файл |
-|------|------|
-| Replication | [replication](../trade-offs/data/replication-sync-async.md) |
-| Master / multi-master | [master-slave](../trade-offs/data/master-slave-multi-master.md) |
-| Sharding | [sharding](../trade-offs/data/sharding-partitioning.md) |
-| Caching | [cache](../trade-offs/architecture/caching-patterns.md) |
+### Data layer
 
 ```mermaid
 flowchart LR
     Writers --> Master[("Master")]
-    Master -->|replicate| Replicas[("Replicas")]
+    Master -->|HA replicate| Replicas[("Replicas")]
     Replicas --> Readers[Readers]
     Services --> Router[Shard Router]
     Router --> Shards[("Shard 1..N")]
@@ -58,24 +51,10 @@ flowchart LR
 | 1 | … | … |
 | 2 | … | … |
 
-**При сбое:** деградация из trade-offs шага 2 (Reliability).
+**При сбое:** деградация из §5 failure modes.
 
 ---
 
-## Шаг 6 — Technology choices (после HLD)
-
-Не в workflow-файле — в **example §6**: дерево решений на broker / cache / DB + infra table.
-
-| Вопрос | Куда |
-|--------|------|
-| Нужен replay / fan-out? | → log vs queue → [brokers](../trade-offs/technologies/message-brokers.md) |
-| Read >> write? | → cache pattern → [cache](../trade-offs/architecture/caching-patterns.md) |
-| ACID + scale? | → DB + sharding → [databases](../trade-offs/technologies/databases.md) |
-
-Шаблон: [instagram-feed §6](../examples/instagram-feed.md#6-technology-choices)
-
----
-
-← [04 — Data](04-data-model.md) · [FRAMEWORK](../FRAMEWORK.md)
+← [05 — Arch characteristics](05-architectural-characteristics.md) · [FRAMEWORK](../FRAMEWORK.md) · [07 — Technology](07-technology-choices.md) →
 
 Примеры: [instagram-feed.md](../examples/instagram-feed.md) · [paypal-payments.md](../examples/paypal-payments.md) · [vk-social.md](../examples/vk-social.md)
