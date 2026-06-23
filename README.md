@@ -15,3 +15,7 @@
 ## Пример
 
 [Instagram-like feed](examples/instagram-feed.md) — один файл, все шаги.
+
+## Trade-offs
+
+45 тем — индекс в [FRAMEWORK.md](FRAMEWORK.md#trade-offs), детали в [trade-offs/](trade-offs/).
