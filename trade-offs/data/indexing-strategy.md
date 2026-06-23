@@ -1,84 +1,241 @@
 ---
 layer: pattern
 steps: [4]
+related:
+  - constraints/latency-vs-throughput
+  - data/pagination-cursor-offset
+  - data/sharding-partitioning
+  - data/normalization-denormalization
+  - data/sql-vs-nosql-paradigm
+  - technologies/databases
 ---
 
 # Indexing Strategy (стратегия индексирования)
 
-> **Главное:** Indexing — повышает read performance, ухудшает write. Вход — query patterns (шаг 2).
+> **Главное:** индекс — не «да/нет», а **3 слоя**: gate → **алгоритм** (механика структуры) → **форма** (single / composite / partial / covering).  
+> Вход — **FR** (шаг 1) + **NFR** (шаг 2). Выход — DDL на шаге 4.  
+> Структура по мотивам Kleppmann, *Designing Data-Intensive Applications*, гл. 3.
 
-## Что определяет выбор
+## Цепочка решений (3 слоя)
+
+```
+Шаг 1 FR   →  equality / range / sort / keyword / semantic / geo
+Шаг 2 NFR  →  read:write · p99 · table size · write TPS
+        ↓
+Шаг 4A     →  индекс нужен? (gate)
+        ↓
+Шаг 4B     →  класс структуры (B-Tree / LSM / Hash / GIN / Vector / GiST / BRIN)
+        ↓
+Шаг 4C     →  форма индекса
+        ↓
+Шаг 2 Infra → PostgreSQL · [partition](sharding-partitioning.md) · [databases](../technologies/databases.md)
+```
+
+## Сводная таблица (DDIA-style)
+
+| Структура | Как ищет | Read | Write | Место | Типичный движок |
+|-----------|----------|------|-------|-------|-----------------|
+| **B-Tree** | range + sort + `=` | O(log N) | in-place, page split | среднее | PostgreSQL, MySQL |
+| **LSM / SSTable** | sorted segments + bloom | O(log N) approx | append + merge | компакция | Cassandra, RocksDB, ES |
+| **Hash** | bucket | O(1) avg | rehash | компактно | Redis, `USING HASH` |
+| **Inverted (GIN)** | term → doc ids | fast keyword | heavy update | большой | PG GIN, Lucene |
+| **Vector (ANN)** | embedding similarity | approximate k-NN | heavy build | очень большой | pgvector HNSW/IVFFlat, Milvus |
+| **GiST** | R-tree-like | nearest | moderate | среднее | PostGIS |
+| **BRIN** | block min/max | range on correlated cols | minimal | крошечный | PG BRIN, logs |
+
+---
+
+## Шаг A — gate: индекс нужен?
 
 | Вопрос | Если «да» | Выбор |
 |--------|-----------|-------|
-| Частые фильтры/сортировки? | Да | Indexes |
-| High write throughput? | Да | Sparse / partial indexes |
-
-## Цепочка решений
-
-Шаг 2 queries → шаг 4 schema/index → шаг 2 Infra tech
-
-## С индексами (B-Tree, Hash, GIN, Composite)
-
-- ➕ **Плюсы:** SELECT/WHERE/ORDER BY на порядки быстрее; covering index → index-only scan.
-- ➖ **Минусы / Цена:** INSERT/UPDATE/DELETE медленнее (rebuild tree); RAM (Random Access Memory, оперативная память) + disk; wrong index = wasted space.
-- 📍 **Где применять:** columns в WHERE, JOIN, ORDER BY с high selectivity.
-
-## Без индексов (или minimal)
-
-- ➕ **Плюсы:** fast writes; less storage; simpler maintenance.
-- ➖ **Минусы / Цена:** full table scan; unusable at millions of rows.
-- 📍 **Где применять:** append-only logs, small tables, write-heavy counters (better: separate strategy).
-
-## Composite vs Single-column
-
-| Type | Когда |
-|------|-------|
-| Single | One filter column dominant |
-| Composite (a,b,c) | Multi-column WHERE; order matters (leftmost prefix) |
-| Covering | Index contains all SELECT columns → no table lookup |
-
-## Partial Index
-
-- Index only `WHERE status = 'active'` → smaller, faster for hot subset.
-
-**Правило:** index for read patterns from step 1 FR (Functional Requirements, функциональные требования), not «index everything».
+| Запросы по колонке в WHERE / JOIN / ORDER BY? | Да | → шаг B |
+| Таблица < 10K строк, rare reads? | Нет | seq scan OK |
+| Write >> read, hot data в cache? | Нет | [cache](../architecture/caching-patterns.md) / [denorm](normalization-denormalization.md) |
+| Append-only log, query по времени? | Частично | [partition](sharding-partitioning.md) + BRIN |
 
 ---
 
-## Примечания (Habr, часть 2)
+## Шаг B — дерево вопросов → алгоритм
 
-### Как работает индекс
-
-- **Без индекса:** full table scan — O(N), каждая строка проверяется.
-- **С B-Tree индексом:** O(log N) — id отсортированы, binary search по дереву.
-- Primary Key в PostgreSQL → индекс создаётся автоматически.
-
-```sql
-CREATE INDEX idx_users_email ON users(email);
--- Одна строка — B-tree строит БД сама
+```
+1. Semantic / similarity по embedding?   да → Vector (HNSW / IVFFlat)
+                                         нет → 2
+2. Нужен range / ORDER BY?               нет → Hash (только =)
+                                         да  → 3
+3. Keyword / jsonb / full-text?            да → GIN tsvector
+                                         нет → 4
+4. Geo / ranges?                           да → GiST
+                                         нет → 5
+5. Append-only huge log?                   да → BRIN (+ partition)
+                                         нет → 6
+6. Write TPS > 10K, append-only?          да → LSM-СУБД ([sql-vs-nosql](sql-vs-nosql-paradigm.md))
+                                         нет → B-Tree (default)
 ```
 
-### Когда индекс + partition
+### GIN vs Vector — не путать на собесе
 
-Большой индекс на огромной таблице → медленный search. **Partitioning** делит таблицу → у каждой partition свой меньший индекс → быстрее.
+| Вопрос | GIN / full-text | Vector ANN |
+|--------|-----------------|------------|
+| Точное слово / токен? | да | нет |
+| «Похожий смысл» / embedding? | нет | да |
+| Explainable keyword match? | да | нет |
 
-Query `WHERE created_at BETWEEN '2023-02-01' AND '2023-03-01'` → PostgreSQL идёт только в partition `users_2023_02` (partition pruning).
+### Quick reference (FR + NFR)
 
-**Источник:** [часть 2](https://habr.com/ru/articles/877312/)
-
+| Запрос (FR) | NFR | Алгоритм |
+|-------------|-----|----------|
+| `=`, `IN`, JOIN, range, sort | default OLTP | B-Tree |
+| только `=` | max point lookup | Hash |
+| keyword, `jsonb @>` | search latency | GIN |
+| semantic / RAG | recall@k, millions vectors | Vector HNSW |
+| geo | location UC | GiST |
+| time-series log | write-heavy | BRIN |
+| hot subset | write cost | Partial B-Tree |
 
 ---
 
-## Сокращения в этом файле
+## Карточки алгоритмов
+
+### B-Tree
+
+- **Как работает:** сбалансированное дерево; данные в фиксированных **страницах**; insert/update **на месте**; при переполнении — split страницы + WAL.
+- **Операции:** read O(log N) · write O(log N) + splits · space средний.
+- **Когда:** OLTP, timeline `ORDER BY`, FK joins, 90% relational UC.
+- **Когда нет:** append-only write flood → LSM лучше.
+- **PostgreSQL:** default; `CREATE INDEX idx ON t(a, b DESC)`.
+
+### LSM / SSTable
+
+- **Как работает:** write в **memtable** → flush sorted **SSTable**-сегментов на диск → **compaction** (merge); read идёт через bloom filter + несколько сегментов.
+- **Операции:** write O(1) append · read дороже (merge) · space — компакция.
+- **Когда:** write >> read, append-only, миллионы w/s (metrics, events).
+- **Когда нет:** нужны in-place UPDATE, сложные JOIN, strong OLTP — бери B-Tree (PG).
+- **Аналог:** Cassandra, RocksDB, LevelDB, Elasticsearch segments → [sql-vs-nosql](sql-vs-nosql-paradigm.md).
+
+### Hash
+
+- **Как работает:** hash(key) → bucket → список коллизий; только **exact match**.
+- **Операции:** read O(1) avg · write O(1) · нет range/sort.
+- **Когда:** session lookup, immutable key, pure `=`.
+- **Когда нет:** `BETWEEN`, `ORDER BY`, prefix search.
+- **PostgreSQL:** `CREATE INDEX ... USING HASH(col)` — редко; B-Tree часто достаточно.
+
+### Inverted — GIN (full-text / jsonb)
+
+- **Как работает:** **posting list**: термин/token → список doc id; для jsonb — inverted по ключам/элементам.
+- **Операции:** search fast · insert/update тяжёлые (перестройка lists).
+- **Когда:** `@@` full-text, `jsonb @>`, arrays, trigram `LIKE`.
+- **Когда нет:** semantic similarity (→ Vector); частые UPDATE поля.
+- **PostgreSQL:** `USING GIN`; `to_tsvector` для full-text.
+
+### Vector ANN — HNSW / IVFFlat
+
+- **Как работает:** embedding (float[]) → **approximate** nearest neighbors; **HNSW** — многоуровневый граф соседей; **IVFFlat** — k-means кластеры → exact search внутри кластера.
+- **Операции:** query O(log N) approximate · insert/update дороже HNSW · rebuild при смене модели.
+- **Когда:** FR = похожие посты, semantic search, RAG; NFR = recall@k, p99 query, 100K+ vectors.
+- **Когда нет:** keyword match (→ GIN); <100K vectors — brute force OK; нужен 100% exact recall.
+- **PostgreSQL:** `pgvector` — `USING hnsw (embedding vector_cosine_ops)` или `ivfflat`; scale → Milvus, Pinecone.
+- **HNSW vs IVFFlat:** HNSW — выше recall и query speed, больше RAM; IVFFlat — быстрее build, нужен tuning `lists`.
+
+### GiST / SP-GiST
+
+- **Как работает:** обобщённое **search tree**; R-tree для bounding boxes; SP-GiST — space partition (quadtrees).
+- **Операции:** nearest-neighbor moderate · equality хуже B-Tree.
+- **Когда:** `ST_DWithin`, ranges, PostGIS.
+- **Когда нет:** simple `=` на scalar — B-Tree.
+- **PostgreSQL:** `USING GIST(geom)`; PostGIS extension.
+
+### BRIN
+
+- **Как работает:** **block ranges** — min/max на группу страниц; skip целые блоки при range query.
+- **Операции:** read O(blocks) · write minimal · tiny index size.
+- **Когда:** append-only, `created_at` correlated с physical order, huge logs.
+- **Когда нет:** random INSERT, low correlation — useless.
+- **PostgreSQL:** `USING BRIN(created_at)`.
+
+---
+
+## Шаг C — форма индекса
+
+| Форма | Когда | Пример |
+|-------|-------|--------|
+| **Single** | один dominant filter | `(post_id)` |
+| **Composite** (concatenated, DDIA) | multi-column WHERE + sort | `(user_id, created_at DESC)` |
+| **Covering (INCLUDE)** | fixed SELECT, index-only scan | `(user_id, created_at) INCLUDE (caption)` |
+| **UNIQUE** | constraint + lookup | `(email)`, `(idempotency_key)` |
+| **Partial** | hot subset | `WHERE status = 'active'` |
+
+**Порядок в composite:** equality columns first → range/sort last.
+
+**Multi-index vs composite:** два single `(a)` + `(b)` ≠ один `(a,b)` для `WHERE a AND b` — composite выигрывает.
+
+**Leftmost prefix:** `(a,b,c)` для `WHERE a`, `WHERE a,b`; не для `WHERE b` alone.
+
+---
+
+## Связь с NFR и выбором СУБД
+
+| NFR / нагрузка | Индекс / движок |
+|----------------|-----------------|
+| Read-heavy, p99 < 50ms | composite / covering под UC |
+| Write-heavy (>1K w/s) | меньше индексов · partial · BRIN · LSM-СУБД |
+| Large table (>100M rows) | composite + [partition](sharding-partitioning.md) |
+| Low selectivity | partial, не full index на `status` |
+| OLTP mixed | PG B-Tree |
+| Semantic / RAG | pgvector HNSW или vector DB |
+
+---
+
+## Антипаттерны
+
+| Ошибка | Почему плохо |
+|--------|--------------|
+| GIN вместо Vector для «похожий смысл» | keyword ≠ semantic |
+| Vector для exact keyword | overkill, хуже explainability |
+| Hash для feed timeline | нет ORDER BY |
+| B-Tree на write flood 10K+ w/s | page splits; нужен LSM |
+| GIN на часто UPDATE поле | write amplification |
+| Composite `(created_at, user_id)` для `WHERE user_id` | leftmost prefix fail |
+
+**Правило:** index for **read patterns from step 1 FR**, not «index everything».
+
+---
+
+## SQL-примеры
+
+```sql
+-- B-Tree composite (feed)
+CREATE INDEX idx_posts_feed ON posts(user_id, created_at DESC);
+
+-- Partial (saga active)
+CREATE INDEX idx_saga_active ON saga_instances(instance_id)
+  WHERE status IN ('PENDING', 'RUNNING');
+
+-- GIN full-text
+CREATE INDEX idx_posts_fts ON posts USING GIN(to_tsvector('russian', caption));
+
+-- Vector semantic (pgvector)
+CREATE INDEX idx_posts_emb ON posts
+  USING hnsw (embedding vector_cosine_ops);
+```
+
+### Индекс + partition
+
+Huge table → partition → меньший индекс на partition → [partition pruning](sharding-partitioning.md).
+
+**Источники:** Kleppmann DDIA гл. 3 · [Habr ч.2](https://habr.com/ru/articles/877312/)
+
+---
+
+## Сокращения
 
 | Аббревиатура | Расшифровка |
 |--------------|-------------|
-| FR | Functional Requirements — функциональные требования |
-| NFR | Non-Functional Requirements — нефункциональные требования |
-| HLD | High-Level Design — высокоуровневый дизайн |
-| RPS | Requests Per Second — запросов в секунду |
-| CAP | Consistency, Availability, Partition tolerance |
-| LB | Load Balancer — балансировщик нагрузки |
+| FR | Functional Requirements |
+| NFR | Non-Functional Requirements |
+| ANN | Approximate Nearest Neighbor |
+| LSM | Log-Structured Merge-tree |
+| RAG | Retrieval-Augmented Generation |
 
-Полный индекс: [README.md](../../FRAMEWORK.md#trade-offs).
+Полный индекс: [FRAMEWORK.md](../../FRAMEWORK.md#trade-offs).

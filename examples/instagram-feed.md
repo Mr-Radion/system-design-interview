@@ -73,7 +73,18 @@ Storage   = 80 MB/s × 86_400 × 365 ≈ 2.5 TB/год
 |------|-----|
 | SQL для графа и транзакций ([sql-nosql](../trade-offs/data/sql-vs-nosql-paradigm.md)) | PostgreSQL |
 | Денорм feed list в Redis ([norm-denorm](../trade-offs/data/normalization-denormalization.md)) | да |
-| Индекс `(user_id, created_at)` под ленту ([indexing](../trade-offs/data/indexing-strategy.md)) | да |
+
+### Indexing trade-offs → выбор
+
+| Запрос (FR) | NFR | Алгоритм | Форма | Механика | ✅ |
+|-------------|-----|----------|-------|----------|-----|
+| UC2 лента `WHERE user_id=? ORDER BY created_at DESC` | read 20:1 · p99 ≤ 2s | B-Tree | composite `(user_id, created_at DESC)` | sorted leaves → ORDER BY без sort step | да |
+| UC3 like by `post_id` | burst writes | B-Tree | single `(post_id)` | point lookup по FK | да |
+| UC1 login по email | rare lookup | B-Tree | UNIQUE `(email)` | equality на unique key | да |
+| keyword по caption | out of scope MVP | GIN | tsvector | posting list по токенам | нет |
+| semantic «похожие посты» | deferred UC | Vector | HNSW | ANN по embedding, не keyword | нет |
+
+→ цепочка: [indexing](../trade-offs/data/indexing-strategy.md)
 
 ### Trade-offs → выбор (data layer)
 

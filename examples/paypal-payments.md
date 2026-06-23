@@ -74,7 +74,17 @@ Storage    ≈ 1B × 200 B ≈ 200 GB/мес (ledger only)
 |------|-----|
 | SQL + ACID для денег ([sql-nosql](../trade-offs/data/sql-vs-nosql-paradigm.md)) | PostgreSQL ledger |
 | Double-entry, normalized ([norm-denorm](../trade-offs/data/normalization-denormalization.md)) | debit/credit пары |
-| Индекс `(account_id, created_at)` ([indexing](../trade-offs/data/indexing-strategy.md)) | да |
+
+### Indexing trade-offs → выбор
+
+| Запрос (FR) | NFR | Алгоритм | Форма | Механика | ✅ |
+|-------------|-----|----------|-------|----------|-----|
+| баланс / ledger `WHERE account_id=? ORDER BY created_at` | CP · read primary | B-Tree | composite `(account_id, created_at)` | range history per account в sorted pages | да |
+| idempotency lookup | p99 ≤ 500ms | B-Tree | UNIQUE `(idempotency_key)` | exact match, constraint + dedup | да |
+| saga poll `instance_id` + active status | orchestrator poll | B-Tree | partial `WHERE status IN (...)` | меньше индекс → меньше write amplification | да |
+| webhook dedup `event_id` | at-least-once | B-Tree | UNIQUE `(event_id)` | point lookup на duplicate event | да |
+
+→ цепочка: [indexing](../trade-offs/data/indexing-strategy.md)
 
 ### Trade-offs → выбор (data + distributed TX)
 
