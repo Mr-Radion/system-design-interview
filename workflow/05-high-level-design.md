@@ -64,4 +64,4 @@ flowchart LR
 
 ← [04 — Data](04-data-model.md) · [FRAMEWORK](../FRAMEWORK.md)
 
-Пример: [instagram-feed.md](../examples/instagram-feed.md)
+Примеры: [instagram-feed.md](../examples/instagram-feed.md) · [paypal-payments.md](../examples/paypal-payments.md)

@@ -12,9 +12,12 @@
 4. [Data Model](workflow/04-data-model.md)
 5. [High-Level Design](workflow/05-high-level-design.md)
 
-## Пример
+## Примеры
 
-[Instagram-like feed](examples/instagram-feed.md) — один файл, все шаги.
+| Пример | Фокус |
+|--------|-------|
+| [Instagram-like feed](examples/instagram-feed.md) | read-heavy · CDN · sharding · cache |
+| [PayPal-like payments](examples/paypal-payments.md) | saga · outbox · idempotency · ledger CP |
 
 ## Trade-offs
 

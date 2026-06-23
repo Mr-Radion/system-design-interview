@@ -14,7 +14,10 @@
 
 ## Пример целиком
 
-[examples/instagram-feed.md](examples/instagram-feed.md) — лента постов (Instagram-like), все 5 шагов.
+| Пример | Паттерн |
+|--------|---------|
+| [instagram-feed.md](examples/instagram-feed.md) | read-heavy · CDN · sharding · cache-aside |
+| [paypal-payments.md](examples/paypal-payments.md) | transactional · **saga** · **outbox** · idempotency |
 
 ## Trade-offs
 
