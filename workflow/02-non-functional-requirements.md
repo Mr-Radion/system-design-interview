@@ -18,6 +18,16 @@ Write Mbps = write_RPS × размер_поста
 Storage/год = write_Mbps × 86_400 × 365
 ```
 
+## Latency — порядок величин (back-of-envelope)
+
+| Store / hop | ~latency |
+|-------------|----------|
+| RAM / L1 cache | µs |
+| SSD | ~1 ms |
+| HDD | ~10 ms |
+| Same DC network | ~0.5 ms |
+| Cross-region | ~50–150 ms |
+
 ## Чеклист + trade-offs
 
 | Блок | Темы | Trade-offs |
@@ -43,4 +53,4 @@ Storage/год = write_Mbps × 86_400 × 365
 
 ← [01 — FR](01-functional-requirements.md) · [FRAMEWORK](../FRAMEWORK.md) · [03 — API](03-api-design.md) →
 
-Пример: [instagram-feed.md](../examples/instagram-feed.md)
+Пример: [instagram-feed.md](../examples/instagram-feed.md) · [vk-social.md](../examples/vk-social.md)

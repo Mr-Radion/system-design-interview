@@ -11,6 +11,7 @@
 | 3. API | [workflow/03-api-design.md](workflow/03-api-design.md) |
 | 4. Data model | [workflow/04-data-model.md](workflow/04-data-model.md) |
 | 5. High-Level Design | [workflow/05-high-level-design.md](workflow/05-high-level-design.md) |
+| 6. Technology choices | [examples/instagram-feed.md](examples/instagram-feed.md#6-technology-choices) (в example §6) |
 
 ## Пример целиком
 
@@ -18,10 +19,36 @@
 |--------|---------|
 | [instagram-feed.md](examples/instagram-feed.md) | read-heavy · CDN · sharding · cache-aside |
 | [paypal-payments.md](examples/paypal-payments.md) | transactional · **saga** · **outbox** · idempotency |
+| [vk-social.md](examples/vk-social.md) | social graph · messaging · capstone §1–6 |
+
+## Модули знаний
+
+| Модуль | Workflow | Trade-offs / examples |
+|--------|----------|------------------------|
+| 1. Компоненты | шаг 2, 5 | LB, cache, gateway, observability |
+| 2. Хранение | шаг 4 | indexing, sql-nosql, norm-denorm |
+| 3. Распределённое | шаг 4–5 | replication, sharding, CAP |
+| 4. Паттерны | шаг 5 | saga, messaging, resilience, deployment |
+| 5–6. Кейсы | examples | instagram, paypal |
+| 7. Capstone | example §1–6 | vk-social |
+
+## Шаблон trade-off
+
+Эталон: [indexing-strategy.md](trade-offs/data/indexing-strategy.md) · термины: [GLOSSARY.md](GLOSSARY.md)
+
+```
+> Главное (1 абзац)
+## Цепочка решений (N слоёв)
+## Шаг A — gate
+## Шаг B — варианты (Как работает / Когда / Когда нет)
+## Резюме
+## FAQ (собес)
+## Сокращения
+```
 
 ## Trade-offs
 
-45 тем. Группировка = чеклист [шага 2](workflow/02-non-functional-requirements.md); API / Data / HLD — шаги 3–5.
+47 тем. Группировка = чеклист [шага 2](workflow/02-non-functional-requirements.md); API / Data / HLD — шаги 3–5.
 
 ### Шаг 2 — по блокам NFR
 
@@ -41,6 +68,7 @@
 | Scalability vs performance | [scalability-vs-performance](trade-offs/constraints/scalability-vs-performance.md) |
 | Autoscaling vs fixed | [autoscaling-vs-fixed-capacity](trade-offs/constraints/autoscaling-vs-fixed-capacity.md) |
 | Caching patterns | [caching-patterns](trade-offs/architecture/caching-patterns.md) |
+| Cache eviction | [cache-eviction-policies](trade-offs/architecture/cache-eviction-policies.md) |
 
 #### Consistency
 
@@ -123,3 +151,4 @@
 | Concurrency vs parallelism | [concurrency-vs-parallelism](trade-offs/architecture/concurrency-vs-parallelism.md) |
 | Distributed coordination | [distributed-coordination](trade-offs/architecture/distributed-coordination.md) |
 | ETL pipeline | [etl-pipeline-pattern](trade-offs/architecture/etl-pipeline-pattern.md) |
+| Deployment / release | [deployment-release-strategies](trade-offs/architecture/deployment-release-strategies.md) |

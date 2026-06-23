@@ -62,6 +62,20 @@ flowchart LR
 
 ---
 
+## Шаг 6 — Technology choices (после HLD)
+
+Не в workflow-файле — в **example §6**: дерево решений на broker / cache / DB + infra table.
+
+| Вопрос | Куда |
+|--------|------|
+| Нужен replay / fan-out? | → log vs queue → [brokers](../trade-offs/technologies/message-brokers.md) |
+| Read >> write? | → cache pattern → [cache](../trade-offs/architecture/caching-patterns.md) |
+| ACID + scale? | → DB + sharding → [databases](../trade-offs/technologies/databases.md) |
+
+Шаблон: [instagram-feed §6](../examples/instagram-feed.md#6-technology-choices)
+
+---
+
 ← [04 — Data](04-data-model.md) · [FRAMEWORK](../FRAMEWORK.md)
 
-Примеры: [instagram-feed.md](../examples/instagram-feed.md) · [paypal-payments.md](../examples/paypal-payments.md)
+Примеры: [instagram-feed.md](../examples/instagram-feed.md) · [paypal-payments.md](../examples/paypal-payments.md) · [vk-social.md](../examples/vk-social.md)

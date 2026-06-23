@@ -99,8 +99,45 @@ related:
 
 **Over-engineering:** при 10K users не шардируйте под 10M.
 
-**Источник:** [часть 2](https://habr.com/ru/articles/877312/)
+## Routing topology
 
+| Топология | Плюс | Минус |
+|-----------|------|-------|
+| Client-side | нет лишнего hop | routing logic в app |
+| Proxy (Vitess, ProxySQL) | прозрачно для app | SPOF, ops |
+| Coordinator | гибкая политика | latency + complexity |
+
+## Rebalancing (добавление shard)
+
+| Стратегия | Суть |
+|-----------|------|
+| Read-only migration | старый shard read-only → copy → cutover |
+| Dual-write window | пишем в old + new, потом switch read |
+| Logical replication | replicate → promote new shard |
+| Mixed | production: read-only + backfill + verify |
+
+## Rendezvous hashing
+
+Альтернатива consistent hashing: каждый key → score на каждой ноде; min score wins. Меньше skew при неравномерных weights. → [GLOSSARY](../../GLOSSARY.md#rendezvous-hashing)
+
+## Резюме
+
+- Сначала vertical → index → **partition** → replica → **shard**.
+- Partition = один сервер, прозрачный SQL. Shard = разные серверы, app routing.
+- Hash shard — default; range — time queries; geo — compliance.
+- Rebalance — отдельный проект, не «нажал кнопку».
+
+## FAQ (собес)
+
+| Вопрос | Ответ |
+|--------|-------|
+| Partition vs shard? | Partition: one DB, PG routes. Shard: multiple DBs, app routes. |
+| Hot key на hash shard? | Salting, separate hot shard, cache layer. |
+| Cross-shard JOIN? | Избегать; scatter-gather + merge in app. |
+| Consistent vs rendezvous? | Both minimize remapping; rendezvous better for weighted nodes. |
+| Когда НЕ шардировать? | Пока vertical + partition + replica хватает. |
+
+**Источник:** [часть 2](https://habr.com/ru/articles/877312/)
 
 ---
 

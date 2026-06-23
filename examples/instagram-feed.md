@@ -105,6 +105,122 @@ Peak ~115 w/s write · ~2_900 r/s read · burst ×5 на feed в prime time.
 
 **PostgreSQL** — users, posts, follows, likes · **cache** — feed lists · **object store** — фото
 
+### ER — core entities
+
+```mermaid
+erDiagram
+    USER {
+        uuid id PK
+        string email UK
+        string username
+    }
+    FOLLOW {
+        uuid follower_id FK
+        uuid followee_id FK
+        timestamp created_at
+    }
+    POST {
+        uuid id PK
+        uuid author_id FK
+        text caption
+        timestamp created_at
+    }
+    LIKE {
+        uuid user_id FK
+        uuid post_id FK
+        timestamp created_at
+    }
+    COMMENT {
+        uuid id PK
+        uuid post_id FK
+        uuid author_id FK
+        text body
+    }
+    MEDIA {
+        uuid id PK
+        uuid post_id FK
+        string object_key
+    }
+    FEED_ITEM {
+        uuid viewer_id FK
+        uuid post_id FK
+        timestamp rank
+    }
+
+    USER ||--o{ FOLLOW : follower
+    USER ||--o{ FOLLOW : followee
+    USER ||--o{ POST : writes
+    USER ||--o{ LIKE : gives
+    POST ||--o{ LIKE : receives
+    POST ||--o{ COMMENT : has
+    USER ||--o{ COMMENT : writes
+    POST ||--o{ MEDIA : attaches
+    USER ||--o{ FEED_ITEM : timeline
+    POST ||--o{ FEED_ITEM : in
+```
+
+`FOLLOW` — M:N · `FEED_ITEM` — denorm для Redis (UC2) · `LIKE` — composite PK `(user_id, post_id)`
+
+### Размещение по store
+
+```mermaid
+flowchart TB
+    subgraph pg [PostgreSQL — 8 shards]
+        USER
+        FOLLOW
+        POST
+        LIKE
+        COMMENT
+    end
+
+    subgraph cache [Redis — denorm]
+        FEED_ITEM
+        LikeBuf[like write-behind buffer]
+    end
+
+    subgraph obj [Object Storage + CDN]
+        MEDIA
+    end
+
+    SocialSvc[Social Service] --> pg
+    PostSvc[Post Service] --> pg
+    FeedSvc[Feed Service] --> cache
+    FeedSvc --> pg
+    MediaSvc[Media Service] --> obj
+    MediaSvc --> pg
+    LikeSvc[Like path] --> LikeBuf
+    LikeBuf --> pg
+```
+
+metadata в PG · фото blob в S3 · лента hot users в Redis
+
+### Шардирование — hash by user_id
+
+```mermaid
+flowchart TB
+    Router["Shard Router<br/>hash user_id mod 8"] --> S1[("Shard 1")]
+    Router --> S2[("Shard 2")]
+    Router --> S8[("Shard 8")]
+
+    Note["posts / follows / likes — один shard per user<br/>cross-shard JOIN нет"]
+    Router -.-> Note
+```
+
+shard key = `user_id` · celebrity fan-out через Kafka, не scatter-gather → [sharding](../trade-offs/data/sharding-partitioning.md)
+
+### Репликация — master + read replicas
+
+```mermaid
+flowchart LR
+    Writers[Post / Social write] -->|write| Master[("Master PG")]
+    Master -->|async| R1[("Replica 1")]
+    Master -->|async| R2[("Replica 2")]
+    FeedReaders[Feed read] --> R1
+    FeedReaders --> R2
+```
+
+follows / profile → **primary** · feed timeline → **replica** (stale ≤ replication lag)
+
 | Тема | ✅ |
 |------|-----|
 | SQL для графа и транзакций ([sql-nosql](../trade-offs/data/sql-vs-nosql-paradigm.md)) | PostgreSQL |

@@ -4,6 +4,8 @@
 
 ## Схема
 
+**ER (Mermaid `erDiagram`)** в начале §4 — entities + PK/FK. Затем схемы: store split · sharding · replication. Примеры: [instagram](../examples/instagram-feed.md#4-data) · [paypal](../examples/paypal-payments.md#4-data) · [vk-social](../examples/vk-social.md#4-data)
+
 | Store | Ключ | Индекс |
 |-------|------|--------|
 | … | PK | под запрос |

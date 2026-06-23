@@ -72,6 +72,22 @@ Orchestrator:     saga state machine, timeout → compensate Wallet
 
 CAP: **CP** внутри каждого сервиса; **eventual** между сервисами — норма для Saga.
 
+## Резюме
+
+- **Outbox** — один сервис, at-least-once publish после ACID commit.
+- **Saga** — несколько сервисов, компенсации, без 2PC.
+- Production payments: **оба** + idempotency на consumer.
+- 2PC между микросервисами на собесе — red flag.
+
+## FAQ (собес)
+
+| Вопрос | Ответ |
+|--------|-------|
+| Outbox vs Saga? | Outbox = local TX + event. Saga = multi-service workflow. |
+| Outbox vs dual-write? | Dual-write может потерять event; outbox atomic in TX. |
+| Orchestration vs choreography? | Orch = central state. Choreo = events only. |
+| Компенсация = undo? | Не всегда; adjusting entry, refund, release hold. |
+| Kafka = Saga? | Kafka = transport. Saga = pattern. Temporal = orchestrator. |
 
 ---
 

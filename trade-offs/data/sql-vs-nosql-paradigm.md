@@ -60,7 +60,19 @@ related:
 | Extreme write throughput | Wide-column |
 | Graph traversals | Graph DB |
 
-**Шаг 4:** выбираем парадигму. см. [Infra-таблицу шага 2](../../workflow/02-non-functional-requirements.md).
+## OLTP / OLAP / HTAP
+
+| Класс | Нагрузка | Примеры |
+|-------|----------|---------|
+| **OLTP** | транзакции, short queries | PostgreSQL, MySQL |
+| **OLAP** | analytics, aggregations | ClickHouse, BigQuery |
+| **HTAP** | OLTP + analytics без тяжёлого ETL | TiDB, SingleStore, AlloyDB |
+
+**Gate:** analytics на OLTP без nightly ETL? → HTAP или OLAP replica + ETL → [etl-pipeline-pattern](../architecture/etl-pipeline-pattern.md)
+
+→ [GLOSSARY](../../GLOSSARY.md#htap)
+
+**Шаг 4:** выбираем парадигму. Infra → example §6.
 
 
 ---

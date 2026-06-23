@@ -61,7 +61,25 @@ related:
 - Mutex/lock on rebuild
 - Pre-warm on deploy
 
-**Шаг 5:** pattern. см. [Infra-таблицу шага 2](../../workflow/02-non-functional-requirements.md).
+**Шаг 5:** pattern · eviction policy → [cache-eviction-policies](cache-eviction-policies.md) · §6 infra в example.
+
+## Резюме
+
+- Read-heavy + stale OK → **cache-aside** (90% кейсов).
+- Read must match DB on write → **write-through**.
+- Burst writes, eventual OK → **write-back**.
+- Кэш **ускоряет**, не **несёт** нагрузку вместо БД при miss storm.
+- Invalidation: TTL + delete-on-write; для catalog — versioned keys.
+
+## FAQ (собес)
+
+| Вопрос | Ответ |
+|--------|-------|
+| Cache-aside vs write-through? | Aside: populate on miss. Through: cache writes DB sync. |
+| Что при cache down? | Aside: fallback DB. Through: writes fail or bypass. |
+| Cache stampede? | Lock on rebuild, probabilistic early expiry, pre-warm. |
+| Где CDN vs Redis? | CDN — static/media edge. Redis — dynamic hot keys. |
+| Patterns vs eviction? | Pattern = read/write flow. Eviction = LRU/2Q при full cache. |
 
 ---
 

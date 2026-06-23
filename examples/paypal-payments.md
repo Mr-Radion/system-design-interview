@@ -107,6 +107,124 @@ Peak ~1_000 TPS · ledger 2× entries = ~2K row writes/s at peak.
 
 **PostgreSQL ledger** — accounts, entries, payments, saga · **cache** — idempotency keys · **outbox table** — в каждой БД сервиса
 
+### ER — core entities
+
+```mermaid
+erDiagram
+    ACCOUNT {
+        uuid id PK
+        string currency
+        bigint balance_cents
+        bigint hold_cents
+    }
+    MERCHANT {
+        uuid id PK
+        uuid settlement_account_id FK
+        string name
+    }
+    PAYMENT {
+        uuid id PK
+        uuid payer_account_id FK
+        uuid payee_account_id FK
+        uuid merchant_id FK
+        string status
+        bigint amount_cents
+    }
+    LEDGER_ENTRY {
+        uuid id PK
+        uuid account_id FK
+        uuid payment_id FK
+        string entry_type
+        bigint amount_cents
+        timestamp created_at
+    }
+    SAGA_INSTANCE {
+        uuid id PK
+        uuid payment_id FK
+        string state
+        json step_log
+    }
+    OUTBOX {
+        uuid id PK
+        uuid aggregate_id FK
+        string event_type
+        json payload
+        timestamp published_at
+    }
+    IDEMPOTENCY_RECORD {
+        string idempotency_key UK
+        uuid payment_id FK
+        timestamp expires_at
+    }
+
+    ACCOUNT ||--o{ LEDGER_ENTRY : has
+    PAYMENT ||--o{ LEDGER_ENTRY : generates
+    MERCHANT ||--o{ PAYMENT : receives
+    ACCOUNT ||--o{ PAYMENT : payer
+    ACCOUNT ||--o{ PAYMENT : payee
+    PAYMENT ||--|| SAGA_INSTANCE : orchestrates
+    PAYMENT ||--o{ OUTBOX : emits
+    PAYMENT ||--o| IDEMPOTENCY_RECORD : dedup
+```
+
+double-entry: каждая TX = минимум **debit + credit** · баланс = sum(entries), не mutable column alone
+
+### Размещение по store
+
+```mermaid
+flowchart TB
+    subgraph wallet [Wallet DB shard]
+        ACCOUNT
+        LEDGER_ENTRY
+        OUTBOX_W[OUTBOX wallet]
+    end
+
+    subgraph payment [Payment DB]
+        PAYMENT
+        SAGA_INSTANCE
+        OUTBOX_P[OUTBOX payment]
+    end
+
+    subgraph redis [Redis]
+        IDEMPOTENCY_RECORD
+    end
+
+    WalletAPI[Wallet API] --> wallet
+    PaymentAPI[Payment API] --> payment
+    PaymentAPI --> redis
+    OutboxRelay[Outbox Relay] --> OUTBOX_W
+    OutboxRelay --> OUTBOX_P
+```
+
+ledger + outbox в **одной ACID TX** · idempotency hot path в Redis (TTL 72h)
+
+### Шардирование — hash by account_id
+
+```mermaid
+flowchart TB
+    Router["Ledger Router<br/>hash account_id mod 4"] --> L1[("Shard 1")]
+    Router --> L2[("Shard 2")]
+    Router --> L4[("Shard 4")]
+
+    Note["P2P: sender shard + receiver shard<br/>saga координирует 2 локальные TX"]
+    Router -.-> Note
+```
+
+P2P не один shard — orchestrator вызывает Reserve/Credit на разных shards → [sharding](../trade-offs/data/sharding-partitioning.md)
+
+### Репликация — sync / semi-sync ledger
+
+```mermaid
+flowchart LR
+    Wallet[Wallet write] -->|write| Master[("Shard Master")]
+    Master -->|semi-sync ACK| SyncRep[("Sync Replica")]
+    Master -->|async| AsyncRep[("Async Replica")]
+    Wallet -->|read balance| Master
+    Analytics[Reporting] --> AsyncRep
+```
+
+баланс / available funds — **только primary** · RPO ≈ 0 → [replication](../trade-offs/data/replication-sync-async.md)
+
 | Тема | ✅ |
 |------|-----|
 | SQL + ACID для денег ([sql-nosql](../trade-offs/data/sql-vs-nosql-paradigm.md)) | PostgreSQL ledger |

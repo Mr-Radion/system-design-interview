@@ -47,6 +47,14 @@ related:
 | IP Hash | Session affinity without cookies |
 | Least Response Time | Heterogeneous latency |
 
+## Power of two choices
+
+LB выбирает **2 random** backend, отправляет на менее loaded. O(1) vs scan all servers. → [GLOSSARY](../../GLOSSARY.md#power-of-two-choices)
+
+## GeoDNS
+
+DNS возвращает IP ближайшего региона (latency routing). Для global users; не заменяет health checks.
+
 ## Forward vs Reverse Proxy
 
 | | Forward | Reverse |

@@ -53,12 +53,15 @@ related:
 | At-least-once | May duplicate | + idempotency |
 | Exactly-once | No dup, no loss | Hardest (Kafka transactions) |
 
-## Event Notification vs Event-Carried State Transfer (ECST (Event-Carried State Transfer, состояние в событии)
+## Event Notification vs ECST vs Event Collaboration
 
-| Pattern | Payload | Coupling |
-|---------|---------|----------|
-| Notification | Event ID only | Consumer fetches state |
-| ECST (Event-Carried State Transfer, состояние в событии) | Full state in event | Self-contained, larger messages |
+| Паттерн | Payload | Coupling | Когда |
+|---------|---------|----------|-------|
+| **Event Notification** | id only | loose | consumer тянет state из DB |
+| **Event-Carried State Transfer** | full state | medium | self-contained, меньше DB reads |
+| **Event Collaboration** | shared workflow events | tight | несколько сервисов ведут один процесс |
+
+→ [GLOSSARY](../../GLOSSARY.md#event-collaboration)
 
 ## Event Sourcing
 
