@@ -18,8 +18,37 @@
 
 ## Схема
 
+Шаблон: **trade-offs из шага 4 → выбор → диаграмма** (см. [пример](../examples/instagram-feed.md#5-hld)).
+
+### Общая
+
+```mermaid
+flowchart LR
+    Client --> Gateway
+    Gateway --> Services
+    Services --> DB
+    Services --> Cache
+    Services --> Queue
 ```
-Client → Gateway → Services → DB / Cache / Queue
+
+### Data layer (после trade-offs)
+
+| Тема | Файл |
+|------|------|
+| Replication | [replication](../trade-offs/data/replication-sync-async.md) |
+| Master / multi-master | [master-slave](../trade-offs/data/master-slave-multi-master.md) |
+| Sharding | [sharding](../trade-offs/data/sharding-partitioning.md) |
+| Caching | [cache](../trade-offs/architecture/caching-patterns.md) |
+
+```mermaid
+flowchart LR
+    Writers --> Master[("Master")]
+    Master -->|replicate| Replicas[("Replicas")]
+    Replicas --> Readers[Readers]
+    Services --> Router[Shard Router]
+    Router --> Shards[("Shard 1..N")]
+    Services --> Cache[("Cache")]
+    Cache -->|miss| Replicas
 ```
 
 ## Data flow (1 UC)
