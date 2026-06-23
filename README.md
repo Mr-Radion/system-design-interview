@@ -1,10 +1,8 @@
 # system-design-interview
 
-Шпаргалка System Design для собесов (пример: Instagram-like feed).
+Шпаргалка System Design для собесов.
 
 **Старт:** [FRAMEWORK.md](FRAMEWORK.md)
-
-На GitHub в [шаге 2](workflow/02-non-functional-requirements.md) NFR-секции **раскрываются по клику** (`<details>`).
 
 ## Workflow
 
@@ -13,3 +11,7 @@
 3. [API Design](workflow/03-api-design.md)
 4. [Data Model](workflow/04-data-model.md)
 5. [High-Level Design](workflow/05-high-level-design.md)
+
+## Пример
+
+[Instagram-like feed](examples/instagram-feed.md) — один файл, все шаги.

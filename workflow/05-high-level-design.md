@@ -1,39 +1,25 @@
 # Шаг 5 — High-Level Design
 
-← [FRAMEWORK.md](../FRAMEWORK.md)
+← [FRAMEWORK](../FRAMEWORK.md)
 
-## Схема
+## Схема (boxes)
 
 ```
-Client → DNS → L7 Gateway (JWT, rate limit)
-              → Feed Service → Redis (feed cache)
-              → Post Service → PostgreSQL
-              → Media Service → S3 → CDN
-              → Social Service → PostgreSQL (follows)
-         Kafka ← publish post → Feed Worker (fan-out)
+Client → Gateway → Service A → DB
+                 → Service B → Cache / Queue
 ```
 
-## Data flow: опубликовать пост
+## Data flow (1 критичный UC)
 
-| # | Что происходит |
-|---|----------------|
-| 1 | Client `POST /posts` + idempotency key |
-| 2 | Post Service пишет в PostgreSQL |
-| 3 | Событие в Kafka |
-| 4 | Feed Worker fan-out в Redis Lists подписчиков |
-| 5 | Client 201 — пост создан (в ленте подписчиков через 1–3s) |
+| # | Компонент | Действие |
+|---|-----------|----------|
+| 1 | … | … |
+| 2 | … | … |
 
-## Data flow: открыть ленту
-
-| # | Что происходит |
-|---|----------------|
-| 1 | `GET /feed` → Feed Service |
-| 2 | Read post_ids из Redis |
-| 3 | Hydrate метаданные из PostgreSQL / cache |
-| 4 | URL фото — CDN |
-
-**При сбое Feed Service:** circuit breaker → stale feed из Redis (см. [шаг 2](02-non-functional-requirements.md)).
+**При сбое:** что деградирует (из trade-offs шага 2).
 
 ---
 
 ← Назад: [04 — Data](04-data-model.md) · [FRAMEWORK](../FRAMEWORK.md)
+
+Пример: [instagram-feed.md](../examples/instagram-feed.md)
