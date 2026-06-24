@@ -18,7 +18,7 @@ related:
 
 ## Цепочка решений
 
-Шаг 2 NFR → шаг 5 coordination pattern → шаг 2 Infra tech
+шаг 2 NFR → Deep Dive §4.3 coordination → Deep Dive §4.x (tech)
 
 ## Orchestration
 

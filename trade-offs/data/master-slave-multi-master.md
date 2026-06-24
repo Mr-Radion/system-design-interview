@@ -19,7 +19,7 @@ related:
 
 ## Цепочка решений
 
-Шаг 2 NFR → шаг 5 replication/topology → шаг 2 Infra tech
+шаг 2 NFR → Deep Dive §4.2 replication → Deep Dive §4.x (tech)
 
 ## Master-Slave (Primary-Replica)
 

@@ -18,7 +18,7 @@ related:
 
 ## Цепочка решений
 
-Шаг 2 NFR → шаг 5 pattern → шаг 2 Infra tech
+шаг 2 NFR → Deep Dive §4.x → Deep Dive §4.x (tech)
 
 ## CDN (Content Delivery Network, сеть доставки контента) vs Origin-only
 
@@ -59,7 +59,7 @@ related:
 | Control | TTL (Time To Live, время жизни), permissions | Full |
 | Use | Direct upload/download | Transform on fly |
 
-см. [Infra-таблицу шага 2](../../workflow/02-non-functional-requirements.md).
+см. [Infra-таблицу шаг 2 NFR](../../workflow/02-non-functional-requirements.md).
 
 ---
 
@@ -82,7 +82,7 @@ MP4/PNG/PDF as binary (zeros and ones). 1GB video in relational DB → slow quer
 
 **Examples:** CloudFront, Cloudflare.
 
-### S3 highlights (product notes on step 6)
+### S3 highlights (product notes in examples §4)
 
 11 nines durability, IAM (Identity and Access Management, управление доступом) policies, presigned URLs, pay-as-you-go — cheaper per GB than RDS for files.
 

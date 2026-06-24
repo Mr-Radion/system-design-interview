@@ -18,7 +18,7 @@ related:
 
 ## Цепочка решений
 
-Шаг 2 NFR → шаг 3 API (write guarantees) → шаг 5 pattern (outbox/idempotency) → шаг 2 Infra tech
+шаг 2 NFR → HLD §3.1 + Deep Dive §4.3 → Deep Dive §4.3 outbox/idempotency → Deep Dive §4.x (tech)
 
 ## Зачем
 

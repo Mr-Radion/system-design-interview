@@ -8,7 +8,7 @@ related:
 
 # Sync vs Async (синхронное vs асинхронное взаимодействие)
 
-> **Главное:** Sync vs Async — выбор между немедленным ответом и decoupled delivery. Вход — шаг 2 NFR latency/consistency.
+> **Главное:** Sync vs Async — выбор между немедленным ответом и decoupled delivery. Вход — шаг 2 NFR.
 
 ## Что определяет выбор
 
@@ -19,7 +19,7 @@ related:
 
 ## Цепочка решений
 
-Шаг 2 NFR → шаг 3 API (sync/async) → шаг 5 паттерн → шаг 2 Infra технологи
+шаг 2 NFR → HLD §3.1 sync/async → Deep Dive §4.x → Deep Dive §4.x технологи
 
 ## Synchronous (Request-Response)
 

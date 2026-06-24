@@ -13,22 +13,22 @@ related:
 # Indexing Strategy (стратегия индексирования)
 
 > **Главное:** индекс — не «да/нет», а **3 слоя**: gate → **алгоритм** (механика структуры) → **форма** (single / composite / partial / covering).  
-> Вход — **FR** (шаг 1) + **NFR** (шаг 2). Выход — DDL на шаге 4.  
+> Вход — **FR** (шаг 1) + **NFR** (шаг 2 NFR). Выход — DDL на HLD §3.2.  
 > Структура по мотивам Kleppmann, *Designing Data-Intensive Applications*, гл. 3.
 
 ## Цепочка решений (3 слоя)
 
 ```
 Шаг 1 FR   →  equality / range / sort / keyword / semantic / geo
-Шаг 2 NFR  →  read:write · p99 · table size · write TPS
+шаг 2 NFR  →  read:write · p99 · table size · write TPS
         ↓
-Шаг 4A     →  индекс нужен? (gate)
+HLD §3.2 / Deep Dive §4.2A     →  индекс нужен? (gate)
         ↓
-Шаг 4B     →  класс структуры (B-Tree / LSM / Hash / GIN / Vector / GiST / BRIN)
+HLD §3.2 / Deep Dive §4.2B     →  класс структуры (B-Tree / LSM / Hash / GIN / Vector / GiST / BRIN)
         ↓
-Шаг 4C     →  форма индекса
+HLD §3.2 / Deep Dive §4.2C     →  форма индекса
         ↓
-Шаг 2 Infra → PostgreSQL · [partition](sharding-partitioning.md) · [databases](../technologies/databases.md)
+Deep Dive §4.x → PostgreSQL · [partition](sharding-partitioning.md) · [databases](../technologies/databases.md)
 ```
 
 ## Сводная таблица (DDIA-style)

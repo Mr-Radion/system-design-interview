@@ -20,7 +20,7 @@ related:
 
 ## Цепочка решений
 
-Шаг 2 NFR → шаг 3 API transport → шаг 5 pattern → шаг 2 Infra tech
+шаг 2 NFR → HLD §3.1 / Deep Dive §4.1 → Deep Dive §4.x → Deep Dive §4.x (tech)
 
 ## WebSockets (Full-Duplex)
 

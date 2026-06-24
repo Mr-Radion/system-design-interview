@@ -1,26 +1,25 @@
 # system-design-interview
 
-Шпаргалка System Design для собесов.
+Шпаргалка System Design для собесов — **формат Alex Xu, 45 мин**.
 
 **Старт:** [FRAMEWORK.md](FRAMEWORK.md)
 
-## Workflow
+## Workflow (45 min)
 
-1. [Функциональные требования](workflow/01-functional-requirements.md)
-2. [NFR — цифры и SLO](workflow/02-non-functional-requirements.md)
-3. [API Design](workflow/03-api-design.md)
-4. [Data Model](workflow/04-data-model.md)
-5. [Архитектурные характеристики](workflow/05-architectural-characteristics.md)
-6. [High-Level Design](workflow/06-high-level-design.md)
-7. [Technology choices](workflow/07-technology-choices.md) — [examples §7](examples/instagram-feed.md#7-technology-choices)
+| Шаг | Время | Файл |
+|-----|-------|------|
+| 1. Requirements | 5–8 min | [Функциональные требования](workflow/01-functional-requirements.md) |
+| 2. NFR | 5–7 min | [Метрики · pillars catalog · processing/DR](workflow/02-non-functional-requirements.md) |
+| 3. High-level design | 12–15 min | [API · schema · схема · TOP-3 pillars](workflow/03-high-level-design.md) |
+| 4. Deep Dive + Tech | 15–18 min | [По bottleneck из §2.8 NFR](workflow/04-deep-dive.md) |
 
 ## Примеры
 
 | Пример | Фокус |
 |--------|-------|
-| [Instagram-like feed](examples/instagram-feed.md) | read-heavy · CDN · sharding · cache |
-| [PayPal-like payments](examples/paypal-payments.md) | saga · outbox · idempotency · ledger CP |
-| [VK-like social](examples/vk-social.md) | capstone · messaging · social graph |
+| [Instagram-like feed](examples/instagram-feed.md) | read-heavy · CDN · cache |
+| [PayPal-like payments](examples/paypal-payments.md) | saga · outbox · CP ledger |
+| [VK-like social](examples/vk-social.md) | messaging · social graph |
 
 ## Trade-offs
 

@@ -19,7 +19,7 @@ related:
 
 ## Цепочка решений
 
-Шаг 5 pattern → шаг 2 Infra product
+Deep Dive §4.x pattern → Deep Dive §4.x (tech)
 
 ## Relational (реляционные СУБД)
 

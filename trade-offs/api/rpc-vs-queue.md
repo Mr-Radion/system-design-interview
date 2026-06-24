@@ -8,7 +8,7 @@ related:
 
 # RPC (Remote Procedure Call, удалённый вызов процедуры) vs Queue (удалённый вызов vs очередь сообщений)
 
-> **Главное:** RPC vs Queue — trade-off между синхронностью и долговечностью доставки. Вход — шаг 2 NFR для операции.
+> **Главное:** RPC vs Queue — trade-off между синхронностью и долговечностью доставки. Вход — шаг 2 NFR.
 
 ## Что определяет выбор
 
@@ -19,7 +19,7 @@ related:
 
 ## Цепочка решений
 
-Шаг 2 NFR → шаг 3 API choice → шаг 5 pattern (outbox/queue) → шаг 2 Infra tech
+шаг 2 NFR → HLD §3.1 API → Deep Dive §4.3 outbox/queue → Deep Dive §4.x (tech)
 
 ## RPC (Remote Procedure Call)
 

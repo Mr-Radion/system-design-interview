@@ -1,345 +1,167 @@
 # Пример: PayPal-like payments
 
-← [FRAMEWORK.md](../FRAMEWORK.md) · [instagram-feed.md](instagram-feed.md) — read-heavy пример
+← [FRAMEWORK.md](../FRAMEWORK.md) · [instagram-feed.md](instagram-feed.md)
 
-**Overview:** POST transfer → saga orchestrator → ledger debit/credit · CP ledger, RPO ≈ 0 · outbox + idempotency на каждом слое
+**Overview:** POST transfer → saga → ledger debit/credit · CP ledger, RPO ≈ 0
 
-**100M accounts · P2P + merchant checkout · p99 initiate ≤ 500ms · settle ≤ 5s · SLA 99.99%**
+**100M accounts · P2P + merchant checkout**
 
 ---
 
-## 1. FR
+## 1. FR (5–8 min)
 
 | ID | Требование | Пояснение |
 |----|------------|-----------|
-| **FR-1** | P2P перевод sender → receiver | Double-entry: debit sender + credit receiver |
-| **FR-2** | Merchant checkout hold → capture → settle | Двухфазно: hold funds → PSP capture → credit merchant |
-| **FR-3** | Insufficient funds → fail **без partial debit** | Reserve step atomic; нет «списали, но не зачислили» |
-| **FR-4** | **Idempotency-Key** на все POST write | Retry / double-click → тот же `payment_id` |
-| **FR-5** | Webhook PSP dedup по `event_id` | At-least-once callback ≠ double charge |
-| **FR-6** | Duplicate Kafka event ≠ double ledger entry | Consumer dedup table |
-| **FR-7** | PSP timeout → saga **compensate** hold | Release funds + status FAILED; не DELETE, adjusting entry |
-| **FR-8** | Balance read только с **primary** shard | Available funds не с async replica |
-| **FR-9** | Ledger **immutable** — audit trail | Компенсация = обратная TX, не UPDATE balance напрямую |
-| **FR-10** | Top-up / withdraw через PSP — async | Client polls status; webhook завершает |
-| **FR-11** | Payment status + history для merchant | Webhook notify on terminal state |
-| **FR-12** | **⚠️ Собес:** P2P cross-shard + RPO ≈ 0 | Sender/receiver на разных shards; sync repl на ledger |
+| **FR-1** | P2P перевод sender → receiver | Double-entry: debit + credit |
+| **FR-2** | Merchant checkout hold → capture → settle | Двухфазно через PSP |
+| **FR-3** | Insufficient funds → fail без partial debit | Reserve atomic |
+| **FR-4** | **Idempotency-Key** на все POST write | Retry → тот же payment_id |
+| **FR-5** | Ledger **immutable** — audit trail | Компенсация = adjusting entry |
+| **FR-6** | Balance read только с **primary** shard | Не с async replica |
 
-### UC → FR
-
-| UC | FR |
-|----|-----|
-| UC1 P2P перевод | FR-1, FR-3, FR-4, FR-6, FR-7, FR-12 |
-| UC2 Merchant checkout | FR-2, FR-4, FR-7, FR-11 |
-| UC3 Top-up / withdraw | FR-10, FR-5 |
-| UC4 Статус · история · webhook | FR-11, FR-5 |
-
-**Out of scope:** FX conversion, chargeback automation, crypto, multi-currency netting
-
-**ER:** Account 1──M LedgerEntry · Payment 1──M LedgerEntry · Merchant 1──M Payment
+**Out of scope:** FX, chargeback automation, crypto
 
 ---
 
-## 2. NFR
+## 2. NFR (5–7 min)
 
-### 2.1 Входные допущения
+### 2.2 Расчёты
 
-| Параметр | Значение |
-|----------|----------|
-| Accounts | 100M |
-| Tx | 5 / month / account |
-| UC | P2P + merchant checkout |
-| Ledger | double-entry (debit + credit) |
+| Метрика | Формула | Результат |
+|---------|---------|-----------|
+| Accounts | — | **100M** |
+| Peak TPS | 100M × 5/mo ÷ 30 ÷ 86_400 | **~1_000** |
+| Ledger rows/mo | 500M tx × 2 entries | **~1B** |
+| Storage / mo | 1B × 200 B | **~200 GB** |
 
-**Драйвер дизайна:** FR-8/FR-9 → CP ledger, sync repl; FR-7 → orchestration + compensate.
+**Драйвер:** FR-6 — CP ledger, RPO ≈ 0; saga + cross-shard P2P.
 
-### 2.2 Предварительные расчёты
+### 2.3 SLA / SLO
 
-| Метрика | Допущение | Формула | Результат | FR |
-|---------|-----------|---------|-----------|-----|
-| **Пользователи** | 100M accounts | — | **100M** | — |
-| **Частота** | 5 tx / month / account | — | — | FR-1 |
-| **Peak TPS** | 500M ÷ 30 ÷ 86_400 × 5 | — | **~1_000** | — |
-| **Ledger rows/month** | 500M × 2 entries | — | **~1B** | FR-9 |
-| **Объём данных** | 1B × 200 B | — | **~200 GB/мес** | — |
+| Метрика | Цель |
+|---------|------|
+| Initiate p99 | **≤ 500 ms** |
+| Settle E2E p95 | **≤ 5 s** |
+| SLA uptime | **99.99%** |
+| RPO ledger | **≈ 0** · RTO **< 1 min** |
 
-**Вывод:** FR-8/FR-12 → CP ledger, semi-sync repl; saga + 4 shards.
-
-### 2.3 SLO и целевые метрики
-
-| Метрика | Цель | Примечание |
-|---------|------|------------|
-| Latency initiate p99 | **≤ 500 ms** | POST /transfers |
-| Latency hold p99 | **≤ 500 ms** | merchant |
-| Settle E2E p95 | **≤ 5 s** | async |
-| SLA uptime | **99.99%** | / month |
-| SLO | 95% initiate < 400 ms | SRE |
-| RPO ledger | **≈ 0** | CP |
-| RTO | **< 1 min** | |
-
-**POST /transfers (FR-1, FR-4):**
+**POST /transfers breakdown:**
 
 | Этап | p50 | p99 |
 |------|-----|-----|
-| API + auth | ~20 ms | ~50 ms |
-| Idempotency lookup | ~3 ms | ~10 ms |
-| Saga start + reserve ledger TX | ~80 ms | ~250 ms |
-| Outbox row same TX | ~5 ms | ~15 ms |
-| **Итого** | **~108 ms** | **≤ 500 ms** |
-
-**Async:**
-
-| Процесс | E2E SLO | FR |
-|---------|---------|-----|
-| Settle / PSP capture | ≤ 5 s p95 | FR-2 |
-| Compensate on PSP fail | ≤ 10 s | FR-7 |
+| API + idempotency + saga reserve | ~108 ms | **≤ 500 ms** |
 
 ### 2.4 Throughput
 
-Peak ~1_000 TPS · ledger **~2K row writes/s** · burst ×3 payday · headroom ×2.
+Peak ~1_000 TPS · ledger ~2K row writes/s · burst ×3 payday · headroom ×2.
 
 ### 2.5 Observability
 
-| Метрика | Зачем | FR |
-|---------|-------|-----|
-| `saga_step_lag_seconds` | Stuck payments | FR-7 |
-| `outbox_unpublished_count` | Lost events risk | FR-6 |
-| `idempotency_duplicate_rate` | FR-4 health | FR-4 |
-| `ledger_balance_drift` | CP invariant | FR-9 |
-| `transfer_initiate_p99_ms` | Sync SLO | FR-1 |
+| Метрика | Зачем |
+|---------|-------|
+| `saga_step_lag_seconds` | stuck payments |
+| `outbox_unpublished_count` | lost events risk |
+| `ledger_balance_drift` | CP invariant |
+
+### 2.6 Master Catalog — pillars
+
+| ID | Pillar | ✅ / — | Направление | Почему §2.2/FR | TOP-3? |
+|----|--------|--------|-------------|----------------|--------|
+| O1 | Availability | ✅ | semi-sync repl — HA | SLA 99.99% | — |
+| O2 | Continuity | — | — | не спрашивали | — |
+| O3 | DR | ✅ | **hot** tier | RPO ≈ 0, RTO < 1 min | **да** |
+| S1 | Scalability | ✅ | 4 shards hash account_id | ~1K TPS | — |
+| S2 | Consistency | ✅ | CP ledger | FR-6, RPO ≈ 0 | **да** |
+| X1 | Caching | ✅ | Redis idempotency | sync path dedup | — |
+| X2 | Processing | ✅ | sync initiate, async settle | FR-2 merchant | — |
+| X3 | Observability | ✅ | §2.5 metrics | saga/outbox SLO | — |
+| X4 | Security | ✅ | JWT, rate limit, PCI scope | FR-4 idempotency | — |
+| X5 | Distributed TX | ✅ | saga + outbox | cross-shard P2P | **да** |
+
+### 2.7 Processing paths + DR tier
+
+| Path | Core UC | Когда | Механизм |
+|------|---------|-------|----------|
+| **Sync** | POST /transfers, balance read | user ждёт ACK | API → ledger primary |
+| **Async** | merchant settle, saga steps | PSP timeout, cross-shard | Kafka + orchestrator |
+| **Batch** | — | — | N/A |
+
+**DR tier (O3):** Hot — RPO ≈ 0, RTO < 1 min · semi-sync repl, auto failover.
+
+### 2.8 Bottleneck → START §4
+
+**START:** CP ledger + RPO ≈ 0 → **§4.4 → §4.2** (pillars O3, S2) · **AGENDA:** также X5 → §4.3
 
 ---
 
-## 3. API
+## 3. HLD (12–15 min)
 
-| Вызов | UC | Заметка |
-|-------|-----|---------|
-| `POST /v1/transfers` | UC1 | sync 202 + poll · `Idempotency-Key` ([idempotency](../trade-offs/api/write-api-idempotency.md)) |
-| `POST /v1/payments` | UC2 | hold → capture двухфазно |
-| `POST /v1/wallet/topup` | UC3 | async · webhook PSP callback |
-| `GET /v1/payments/{id}` | UC4 | read from primary shard |
-| `POST /v1/webhooks/psp` | UC3,4 | dedup by `event_id` |
+### 3.1 API
 
-Протокол: **REST** + JSON ([rest-grpc-graphql](../trade-offs/api/rest-grpc-graphql.md)) · между сервисами — **async events** ([sync-async](../trade-offs/api/sync-async-messaging.md))
+| Endpoint | Зачем | Sync/Async |
+|----------|-------|------------|
+| `POST /v1/transfers` | P2P | sync + Idempotency-Key |
+| `POST /v1/payments` | merchant hold/capture | sync initiate, async settle |
+| `GET /v1/payments/{id}` | status | sync, read primary |
 
----
+### 3.2 Data
 
-## 4. Data
-
-**PostgreSQL ledger** — accounts, entries, payments, saga · **cache** — idempotency keys · **outbox table** — в каждой БД сервиса
-
-### ER — core entities
-
-```mermaid
-erDiagram
-    ACCOUNT {
-        uuid id PK
-        string currency
-        bigint balance_cents
-        bigint hold_cents
-    }
-    MERCHANT {
-        uuid id PK
-        uuid settlement_account_id FK
-        string name
-    }
-    PAYMENT {
-        uuid id PK
-        uuid payer_account_id FK
-        uuid payee_account_id FK
-        uuid merchant_id FK
-        string status
-        bigint amount_cents
-    }
-    LEDGER_ENTRY {
-        uuid id PK
-        uuid account_id FK
-        uuid payment_id FK
-        string entry_type
-        bigint amount_cents
-        timestamp created_at
-    }
-    SAGA_INSTANCE {
-        uuid id PK
-        uuid payment_id FK
-        string state
-        json step_log
-    }
-    OUTBOX {
-        uuid id PK
-        uuid aggregate_id FK
-        string event_type
-        json payload
-        timestamp published_at
-    }
-    IDEMPOTENCY_RECORD {
-        string idempotency_key UK
-        uuid payment_id FK
-        timestamp expires_at
-    }
-
-    ACCOUNT ||--o{ LEDGER_ENTRY : has
-    PAYMENT ||--o{ LEDGER_ENTRY : generates
-    MERCHANT ||--o{ PAYMENT : receives
-    ACCOUNT ||--o{ PAYMENT : payer
-    ACCOUNT ||--o{ PAYMENT : payee
-    PAYMENT ||--|| SAGA_INSTANCE : orchestrates
-    PAYMENT ||--o{ OUTBOX : emits
-    PAYMENT ||--o| IDEMPOTENCY_RECORD : dedup
+```
+Account 1──M LedgerEntry · Payment 1──M LedgerEntry · Merchant 1──M Payment
+Store: PostgreSQL ledger (sharded) + Redis (idempotency) + outbox table
 ```
 
-double-entry: каждая TX = минимум **debit + credit** · баланс = sum(entries), не mutable column alone
-
-### Размещение по store
-
-```mermaid
-flowchart TB
-    subgraph wallet [Wallet DB shard]
-        ACCOUNT
-        LEDGER_ENTRY
-        OUTBOX_W[OUTBOX wallet]
-    end
-
-    subgraph payment [Payment DB]
-        PAYMENT
-        SAGA_INSTANCE
-        OUTBOX_P[OUTBOX payment]
-    end
-
-    subgraph redis [Redis]
-        IDEMPOTENCY_RECORD
-    end
-
-    WalletAPI[Wallet API] --> wallet
-    PaymentAPI[Payment API] --> payment
-    PaymentAPI --> redis
-    OutboxRelay[Outbox Relay] --> OUTBOX_W
-    OutboxRelay --> OUTBOX_P
-```
-
-ledger + outbox в **одной ACID TX** · idempotency hot path в Redis (TTL 72h)
-
-### Шардирование — hash by account_id
-
-```mermaid
-flowchart TB
-    Router["Ledger Router<br/>hash account_id mod 4"] --> L1[("Shard 1")]
-    Router --> L2[("Shard 2")]
-    Router --> L4[("Shard 4")]
-
-    Note["P2P: sender shard + receiver shard<br/>saga координирует 2 локальные TX"]
-    Router -.-> Note
-```
-
-P2P не один shard — orchestrator вызывает Reserve/Credit на разных shards → [sharding](../trade-offs/data/sharding-partitioning.md)
-
-### Репликация — sync / semi-sync ledger
-
-```mermaid
-flowchart LR
-    Wallet[Wallet write] -->|write| Master[("Shard Master")]
-    Master -->|semi-sync ACK| SyncRep[("Sync Replica")]
-    Master -->|async| AsyncRep[("Async Replica")]
-    Wallet -->|read balance| Master
-    Analytics[Reporting] --> AsyncRep
-```
-
-баланс / available funds — **только primary** · RPO ≈ 0 → [replication](../trade-offs/data/replication-sync-async.md)
-
-| Тема | ✅ |
-|------|-----|
-| SQL + ACID для денег ([sql-nosql](../trade-offs/data/sql-vs-nosql-paradigm.md)) | PostgreSQL ledger |
-| Double-entry, normalized ([norm-denorm](../trade-offs/data/normalization-denormalization.md)) | debit/credit пары |
-
-### Indexing trade-offs → выбор
-
-| Запрос (FR) | NFR | Алгоритм | Форма | Механика | ✅ |
-|-------------|-----|----------|-------|----------|-----|
-| баланс / ledger `WHERE account_id=? ORDER BY created_at` | CP · read primary | B-Tree | composite `(account_id, created_at)` | range history per account в sorted pages | да |
-| idempotency lookup | p99 ≤ 500ms | B-Tree | UNIQUE `(idempotency_key)` | exact match, constraint + dedup | да |
-| saga poll `instance_id` + active status | orchestrator poll | B-Tree | partial `WHERE status IN (...)` | меньше индекс → меньше write amplification | да |
-| webhook dedup `event_id` | at-least-once | B-Tree | UNIQUE `(event_id)` | point lookup на duplicate event | да |
-
-→ цепочка: [indexing](../trade-offs/data/indexing-strategy.md)
-
-### Trade-offs → выбор (data + distributed TX)
-
-| Тема | A / B | ✅ Выбор | Почему |
-|------|-------|----------|--------|
-| Distributed TX | 2PC / Saga | **Saga** | 2PC не масштабируется · блокирует PSP |
-| Saga стиль ([orchestration](../trade-offs/architecture/orchestration-choreography-saga.md)) | orchestration / choreography | **orchestration** | 4+ шага · compliance · таймауты · компенсации в одном месте |
-| Публикация событий ([saga-outbox](../trade-offs/architecture/saga-vs-outbox.md)) | direct publish / outbox | **transactional outbox** | crash после commit — событие не теряется |
-| Дубликаты ([idempotency](../trade-offs/api/write-api-idempotency.md)) | client key / dedup table | **Idempotency-Key** + dedup webhook | retry + double-click + PSP callback ×2 |
-| Репликация ledger ([replication](../trade-offs/data/replication-sync-async.md)) | sync / async | **sync semi-sync** | RPO ≈ 0 · баланс не может «отставать» |
-| Шардирование ([sharding](../trade-offs/data/sharding-partitioning.md)) | range / hash | **hash(`account_id`) mod 4** | равномерно · P2P = 2 shards (sender+receiver) — saga координирует |
-| Топология ([master-slave](../trade-offs/data/master-slave-multi-master.md)) | master-slave / multi-master | **master-slave** | один writer на shard — проще инвариант «balance ≥ 0» |
-
----
-
-## 5. Architectural characteristics
-
-| Категория | Характеристика | ✅ Выбор | Trade-off | Почему (FR) |
-|-----------|----------------|----------|-----------|-------------|
-| **Operational** | Availability | semi-sync repl + failover | [replication](../trade-offs/data/replication-sync-async.md) | RPO ≈ 0, **HA** |
-| | Continuity | rolling + saga replay | [deployment](../trade-offs/architecture/deployment-release-strategies.md) | SLA 99.99% |
-| | DR | hot standby ledger | [DR](../trade-offs/architecture/disaster-recovery-pattern.md) | RTO < 1 min |
-| **Structural** | Consistency | CP ledger / eventual saga | [CAP](../trade-offs/architecture/cap-pacelc-distributed.md) | FR-8, FR-9 |
-| | Scalability | 4 shards hash account_id | [sharding](../trade-offs/data/sharding-partitioning.md) | ~1K TPS |
-| | Distributed TX | orchestration saga + outbox | [saga-outbox](../trade-offs/architecture/saga-vs-outbox.md) | FR-7, FR-12 |
-| **Cross-cutting** | Idempotency | 3-layer dedup | [idempotency](../trade-offs/api/write-api-idempotency.md) | FR-4, FR-5, FR-6 |
-
-### Failure modes
-
-| Сбой | Поведение | FR |
-|------|-----------|-----|
-| Crash after COMMIT, before publish | Outbox poller догоняет | FR-6 |
-| Duplicate Kafka event | Consumer dedup `event_id` | FR-6 |
-| PSP timeout | Saga compensate hold | FR-7 |
-| Insufficient funds | Fail at reserve | FR-3 |
-| Split-brain shard | Sync repl + fencing | FR-8 |
-
-### Traceability (FR → §5 → §7)
-
-| FR | Arch choice §5 | Tech §7 |
-|----|----------------|---------|
-| FR-4 idempotency | Redis dedup layer | Redis TTL 72h |
-| FR-6/FR-7 | transactional outbox | Kafka + Temporal |
-| FR-8 balance | semi-sync repl (HA) | PG primary only reads |
-| FR-12 cross-shard | orchestration saga | Temporal + 4 shards |
-
----
-
-## 6. HLD
-
-**5 сервисов** ([monolith-micro](../trade-offs/architecture/monolith-microservices.md)) · stateless API · **ledger stateful per shard**
-
-### Общая схема
+### 3.3 HLD — схема системы
 
 ```mermaid
 flowchart TB
     Client --> GW["API Gateway L7"]
     GW --> PaymentAPI[Payment API]
     GW --> WalletAPI[Wallet API]
-
-    PaymentAPI --> Orchestrator["Saga Orchestrator<br/>Temporal"]
+    PaymentAPI --> Orchestrator["Saga Orchestrator"]
     Orchestrator --> WalletAPI
     Orchestrator --> PSP[PSP Adapter]
-    Orchestrator --> Notify[Notification]
-
     WalletAPI --> LedgerRouter["Ledger Shard Router"]
     LedgerRouter --> L1[("Ledger Shard 1")]
     LedgerRouter --> L4[("Ledger Shard 4")]
-
     PaymentAPI --> OutboxRelay[Outbox Relay]
     WalletAPI --> OutboxRelay
     OutboxRelay --> Kafka
     Kafka --> Orchestrator
-    Kafka --> Notify
-
-    PSP --> ExtPSP["External PSP"]
 ```
 
-### Transactional Outbox (внутри сервиса)
+### 3.4 TOP-3 pillars · agenda §4
+
+| # | Pillar (ID) | ✅ Направление | §4 (блок) | Почему |
+|---|-------------|----------------|-----------|--------|
+| 1 | **O3** DR | hot tier, RPO ≈ 0 | §4.4 | §2.3 RPO/RTO |
+| 2 | **S2** Consistency | CP ledger | §4.4 | FR-6 |
+| 3 | **X5** Distributed TX | saga + outbox | §4.3 | cross-shard P2P |
+
+Implementation: semi-sync repl, orchestration vs 2PC — §4, не в TOP-3.
+
+---
+
+## 4. Deep Dive (15–18 min)
+
+**START §4.4 → §4.2** (CP ledger) → затем **§4.3** (X5 saga+outbox из agenda)
+
+### §4.4 CAP + failures (primary — START)
+
+CP ledger · semi-sync repl · saga compensate on PSP timeout.
+
+| Сбой | Поведение |
+|------|-----------|
+| Crash after COMMIT | Outbox poller догоняет |
+| Duplicate Kafka event | Consumer dedup `event_id` |
+
+### §4.2 DB + ledger (secondary)
+
+PostgreSQL double-entry · hash(`account_id`) mod 4 · Redis idempotency TTL 72h.
+
+### §4.3 Broker + outbox (agenda: X5)
+
+Kafka — outbox relay + saga events.
 
 ```mermaid
 sequenceDiagram
@@ -348,153 +170,20 @@ sequenceDiagram
     participant Relay as Outbox Poller
     participant K as Kafka
 
-    API->>DB: BEGIN
-    API->>DB: INSERT ledger_entry debit
-    API->>DB: INSERT outbox FundsReserved
+    API->>DB: BEGIN ledger_entry + outbox
     API->>DB: COMMIT
-    Relay->>DB: SELECT unpublished FROM outbox
     Relay->>K: publish FundsReserved
-    Relay->>DB: UPDATE outbox SET published_at
 ```
 
-одна ACID TX = бизнес-запись + outbox · consumer **идемпотентен** по `event_id`
-
-### UC1 P2P — orchestration saga (happy path)
-
-```mermaid
-sequenceDiagram
-    participant C as Client
-    participant P as Payment API
-    participant O as Orchestrator
-    participant W as Wallet
-    participant N as Notify
-
-    C->>P: POST /transfers Idempotency-Key
-    P->>P: check Redis idempotency
-    P->>O: start TransferSaga
-    O->>W: Reserve sender debit
-    Note over W: ACID ledger + outbox
-    W-->>O: FundsReserved
-    O->>W: Credit receiver
-    W-->>O: FundsCredited
-    O->>N: SendReceipt
-    O-->>P: COMPLETED
-    P-->>C: 200 payment_id
-```
-
-### UC1 — компенсация при сбое
-
-```mermaid
-flowchart TD
-    Start([TransferSaga started]) --> Reserve[1 Reserve sender]
-    Reserve -->|OK| Credit[2 Credit receiver]
-    Reserve -->|fail insufficient funds| Fail1([FAILED no compensate])
-    Credit -->|OK| Done([COMPLETED])
-    Credit -->|fail timeout / shard down| Compensate[3 Compensate Release sender]
-    Compensate -->|OK| Refunded([COMPENSATED])
-    Compensate -->|fail| Manual[Manual reconciliation queue]
-```
-
-компенсация = обратная ledger TX + outbox `FundsReleased` · **не** DELETE, а adjusting entry
-
-### UC2 Merchant checkout — saga steps
-
-| # | Шаг | Сервис | Локальная TX | Событие outbox |
-|---|-----|--------|--------------|----------------|
-| 1 | Create payment PENDING | Payment | payment row + outbox | `PaymentCreated` |
-| 2 | Hold funds | Wallet | debit hold + outbox | `FundsHeld` |
-| 3 | Capture via PSP | PSP Adapter | idempotent call + outbox | `PSPCaptured` |
-| 4 | Settle to merchant | Wallet | credit merchant + outbox | `FundsSettled` |
-| ↩ | PSP fail | Orchestrator | — | compensate: `ReleaseHold` → `PaymentFailed` |
-
-### Идемпотентность — три слоя
-
-```mermaid
-flowchart LR
-    Client["Client Idempotency-Key"] --> API["API dedup Redis"]
-    API --> Saga["Saga instance_id"]
-    Saga --> Consumer["Consumer event_id dedup"]
-    Consumer --> PSP["PSP idempotency_key"]
-```
-
-### Ledger — sync replication
-
-```mermaid
-flowchart LR
-    Wallet[Wallet Service] -->|write| Master[("Shard Master")]
-    Master -->|semi-sync ACK| SyncRep[("Sync Replica")]
-    Master -->|async| AsyncRep[("Async Replica analytics")]
-    Wallet -->|read balance| Master
-```
-
-баланс / available funds — **только primary** · analytics — async replica
-
-### Сбой
-
-| Сбой | Поведение |
-|------|-----------|
-| Crash после COMMIT, до publish | outbox poller догоняет · at-least-once |
-| Duplicate Kafka event | consumer dedup `event_id` · no double debit |
-| PSP timeout | saga timer → compensate hold · status `FAILED` |
-| Orchestrator down | Temporal восстанавливает workflow · workers idempotent |
-| Split-brain shard | sync repl + fencing · manual playbooks |
-
----
-
-## 7. Technology choices
-
-### Orchestrator (multi-step saga)
-
-| Вопрос | Если да | Если нет |
-|--------|---------|----------|
-| 4+ шага с таймаутами / compensate? | orchestration (Temporal) | choreography |
-| Compliance / audit trail? | central workflow state | — |
-| **✅ Выбор** | **Temporal** | UC1/UC2 saga, timers, replay |
-
-→ [orchestration](../trade-offs/architecture/orchestration-choreography-saga.md) · [saga-outbox](../trade-offs/architecture/saga-vs-outbox.md)
-
-### Broker (outbox relay + saga events)
-
-| Вопрос | Если да | Если нет |
-|--------|---------|----------|
-| At-least-once + replay? | log (Kafka) | task queue |
-| Outbox poller → many consumers? | pub/sub | point-to-point |
-| **✅ Выбор** | **Kafka** | outbox relay, saga fan-out |
-
-→ [messaging](../trade-offs/architecture/messaging-patterns.md) · [brokers](../trade-offs/technologies/message-brokers.md)
-
-### Ledger DB
-
-| Вопрос | Выбор |
-|--------|-------|
-| ACID + double-entry | PostgreSQL |
-| RPO ≈ 0 | sync / semi-sync replication |
-| ~1K TPS peak | 4 shards `hash(account_id)` |
-
-→ [replication](../trade-offs/data/replication-sync-async.md) · [sharding](../trade-offs/data/sharding-partitioning.md)
-
-### Idempotency store
-
-| Вопрос | Выбор |
-|--------|-------|
-| TTL keys 72h, p99 lookup | Redis |
-| Webhook dedup | UNIQUE index в PG |
-
-→ [idempotency](../trade-offs/api/write-api-idempotency.md)
-
-### Infra
+### Infra sizing
 
 | Компонент | Тех | Размер | Откуда |
 |-----------|-----|--------|--------|
-| Gateway | ALB L7 / Kong | ~1K TPS | §2.5 |
-| Orchestrator | Temporal | workflow state | §2.4 saga steps |
-| Broker | Kafka, 5 brokers | outbox + saga | §7 broker tree |
-| Ledger DB | PG, 4 shards, sync repl | ~200 GB/mo | §2.2 |
-| Idempotency | Redis cluster | TTL 72h | §2.4 sync path |
-| PSP | Stripe / card network | isolated VPC | PCI scope |
-| API | K8s | stateless pods | §2.5 |
-
-Security: JWT · mTLS internal · PCI только PSP adapter → [gateway](../trade-offs/technologies/api-gateways.md)
+| Orchestrator | Temporal | workflow state | saga steps |
+| Broker | Kafka ×5 | outbox + saga | §2.2 TPS |
+| Ledger DB | PG 4 shards, sync repl | ~200 GB/mo | §2.2 storage |
+| Idempotency | Redis cluster | TTL 72h | sync path |
+| Gateway | ALB L7 | ~1K TPS | §2.2 peak |
 
 ---
 

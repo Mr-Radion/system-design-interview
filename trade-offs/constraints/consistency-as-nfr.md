@@ -20,7 +20,7 @@ related:
 
 ## Цепочка решений
 
-Шаг 2 consistency level → шаг 5 CAP + replication → шаг 3 sync/async → шаг 2 Infra
+шаг 2 NFR consistency level → Deep Dive §4.4 CAP + §4.2 replication → HLD §3.1 sync/async → Deep Dive §4.x
 
 ## Strong Consistency vs Eventual Consistency (как требование)
 

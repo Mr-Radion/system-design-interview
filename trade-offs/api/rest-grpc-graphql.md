@@ -7,7 +7,7 @@ related:
 
 # REST vs gRPC vs GraphQL
 
-> **Главное:** API layer — входной контракт для клиента и сервисов. Вход — шаг 2: FR + NFR (latency/compatibility). Выход — контракт шага 3 и выбор между sync/async и versioning.
+> **Главное:** API layer — входной контракт для клиента и сервисов. Вход — фаза 1 FR + шаг 2 NFR (latency/compatibility). Выход — контракт HLD §3.1 и выбор между sync/async и versioning.
 
 ## Что определяет выбор
 
@@ -19,7 +19,7 @@ related:
 
 ## Цепочка решений
 
-Шаг 2 NFR + FR → Шаг 3 API (контракт) → Шаг 5 паттерн → Шаг 2 Infra технология
+шаг 2 NFR + FR → HLD §3.1 API (контракт) → Deep Dive §4.x паттерн → Deep Dive §4.x технология
 
 ## REST (JSON (JavaScript Object Notation) over HTTP (HyperText Transfer Protocol)
 

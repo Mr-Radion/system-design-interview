@@ -16,7 +16,7 @@ steps: [5]
 
 ## Цепочка решений
 
-Шаг 2 NFR → шаг 5 execution pattern → шаг 2 Infra tech
+шаг 2 NFR → Deep Dive §4.x execution → Deep Dive §4.x (tech)
 
 ## Concurrency (конкурентность)
 

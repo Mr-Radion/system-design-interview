@@ -19,7 +19,7 @@ related:
 
 ## Цепочка решений
 
-Шаг 5 pattern → шаг 2 Infra product
+Deep Dive §4.x pattern → Deep Dive §4.x (tech)
 
 ## Kong
 
@@ -62,7 +62,7 @@ related:
 
 ## Примечания (Habr, часть 3)
 
-В серии API (Application Programming Interface, программный интерфейс) Gateway описан как **pattern** (шаг 5), не конкретный продукт:
+В серии API (Application Programming Interface, программный интерфейс) Gateway описан как **pattern** (Deep Dive §4.x), не конкретный продукт:
 
 | Function | Why at gateway |
 |----------|----------------|

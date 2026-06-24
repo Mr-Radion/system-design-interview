@@ -16,7 +16,7 @@ steps: [3, 4]
 
 ## Цепочка решений
 
-Шаг 2 query semantics → шаг 4 API/data → шаг 2 Infra tech
+шаг 2 NFR query semantics → HLD §3.1 + Deep Dive §4.2 → Deep Dive §4.x (tech)
 
 ## Offset (LIMIT/OFFSET)
 
@@ -43,7 +43,7 @@ steps: [3, 4]
 }
 ```
 
-**Шаг 3:** pagination в API (Application Programming Interface, программный интерфейс) contract. **Шаг 4:** index на sort key (usually PK or `(created_at, id)`).
+**HLD §3.1:** pagination в API (Application Programming Interface, программный интерфейс) contract. **HLD §3.2 / Deep Dive §4.2:** index на sort key (usually PK or `(created_at, id)`).
 
 
 ---

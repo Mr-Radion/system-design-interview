@@ -18,7 +18,7 @@ related:
 
 ## Цепочка решений
 
-Шаг 5 pattern → шаг 2 Infra product selection
+Deep Dive §4.x pattern → Deep Dive §4.x (tech) selection
 
 ## Managed vs Self-hosted (управляемый vs свой хостинг)
 
@@ -56,10 +56,10 @@ related:
 - OSS: no license cost, community, self-support.
 - Commercial (Datadog, MongoDB Atlas): support, features, predictable SLA (Service Level Agreement, соглашение об уровне сервиса).
 
-## Decision checklist (чеклист решений, шаг 2 Infra)
+## Decision checklist (чеклист решений, Deep Dive §4.x)
 
-1. Какой **pattern** из шага 5? (Cache-Aside, event stream…)
-2. Какие **NFR (Non-Functional Requirements, нефункциональные требования)** из шага 2? (p99 (99-й перцентиль задержки), RPO (Recovery Point Objective, допустимая потеря данных), budget)
+1. Какой **pattern** из Deep Dive §4.x? (Cache-Aside, event stream…)
+2. Какие **NFR (Non-Functional Requirements, нефункциональные требования)** из шаг 2 NFR? (p99 (99-й перцентиль задержки), RPO (Recovery Point Objective, допустимая потеря данных), budget)
 3. Managed или self-hosted?
 4. Team знает технологию?
 5. Exit strategy (vendor lock-in acceptable?)

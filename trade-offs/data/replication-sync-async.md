@@ -8,7 +8,7 @@ related:
 
 # Sync vs Async Replication (синхронная vs асинхронная репликация)
 
-> **Главное:** Replication — **отказоустойчивость (HA, DR)**, не масштабирование. Sync vs async — по RPO/RTO (шаг 2 → шаг 5).
+> **Главное:** Replication — **отказоустойчивость (HA, DR)**, не масштабирование. Sync vs async — по RPO/RTO (шаг 2 NFR → Deep Dive §4.x).
 
 ## Replication ≠ scaling
 
@@ -29,7 +29,7 @@ Read с replica — **побочный offload** с replication lag, не primar
 
 ## Цепочка решений
 
-Шаг 2 NFR (RPO/RTO) → шаг 5 Availability → шаг 7 Infra tech
+шаг 2 NFR (RPO/RTO) → Deep Dive §4.4 + §4.2 → Deep Dive §4.x (tech)
 
 ## Synchronous Replication
 
@@ -51,7 +51,7 @@ Read с replica — **побочный offload** с replication lag, не primar
 
 - ACK from **at least one** replica → balance durability vs latency.
 
-**Метрика:** replication lag (seconds) — monitor on step 5 observability.
+**Метрика:** replication lag (seconds) — monitor on Deep Dive §4.x observability.
 
 
 ---

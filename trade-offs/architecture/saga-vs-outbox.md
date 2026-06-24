@@ -43,7 +43,7 @@ related:
 - ➖ **Минусы / Цена:** eventual доставка; poller/relay; дубликаты → нужна idempotency у consumer.
 - 📍 **Где:** заказ создан → событие в Kafka; платёж принят в Wallet → уведомить Analytics.
 
-**Tech (шаг 2 Infra):** PostgreSQL `outbox` table + Debezium CDC **или** polling worker; Kafka/RabbitMQ.
+**Tech (Deep Dive §4.x):** PostgreSQL `outbox` table + Debezium CDC **или** polling worker; Kafka/RabbitMQ.
 
 → Детали: [messaging-patterns](messaging-patterns.md), [write-api-idempotency](../api/write-api-idempotency.md).
 

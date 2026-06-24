@@ -1,37 +1,120 @@
 # Framework System Design
 
-Фреймворк для прохождения system design на собесе.
+Фреймворк для прохождения system design на собесе — **формат Alex Xu, 45 мин**.
 
-## Workflow
+## 45-min timer
 
-| Шаг | Файл |
-|-----|------|
-| 1. Функциональные требования | [workflow/01-functional-requirements.md](workflow/01-functional-requirements.md) |
-| 2. NFR (цифры и SLO) | [workflow/02-non-functional-requirements.md](workflow/02-non-functional-requirements.md) |
-| 3. API | [workflow/03-api-design.md](workflow/03-api-design.md) |
-| 4. Data model | [workflow/04-data-model.md](workflow/04-data-model.md) |
-| 5. Архитектурные характеристики | [workflow/05-architectural-characteristics.md](workflow/05-architectural-characteristics.md) |
-| 6. High-Level Design | [workflow/06-high-level-design.md](workflow/06-high-level-design.md) |
-| 7. Technology choices | [workflow/07-technology-choices.md](workflow/07-technology-choices.md) · [example §7](examples/instagram-feed.md#7-technology-choices) |
+| Шаг | Время | Файл |
+|-----|-------|------|
+| **1. Requirements** | 5–8 min | [workflow/01-functional-requirements.md](workflow/01-functional-requirements.md) |
+| **2. NFR** | 5–7 min | [workflow/02-non-functional-requirements.md](workflow/02-non-functional-requirements.md) |
+| **3. High-level design** | 12–15 min | [workflow/03-high-level-design.md](workflow/03-high-level-design.md) |
+| **4. Deep Dive + Tech** | 15–18 min | [workflow/04-deep-dive.md](workflow/04-deep-dive.md) |
 
-## Пример целиком
+```mermaid
+flowchart LR
+    S1["1 FR<br/>5–8 min"]
+    S2["2 NFR<br/>5–7 min"]
+    S3["3 HLD<br/>12–15 min"]
+    S4["4 Deep Dive<br/>15–18 min"]
+    S1 --> S2 --> S3 --> S4
+```
+
+> **Deep Dive:** начни с **START** (§2.8), пройди **AGENDA** (§3.4 TOP-3), детали — **DETAIL** (§4 trade-offs). Не проходи все 4 блока подряд — остальное по запросу или если осталось 3–5 min.
+
+| Bottleneck §2.8 (START) | Open first |
+|-------------------------|------------|
+| read bandwidth / latency | §4.2 DB + Cache |
+| write fan-out / async | §4.3 Broker |
+| storage / retention | §4.2 (DB + shard) |
+| CP / RPO ≈ 0 | §4.4 → §4.2 |
+| analytics / ETL FR | §4.3 batch |
+| security / routing | §4.1 Gateway |
+
+## Pillars vs Implementation trade-offs
+
+**Три слоя — не путать:**
+
+| Слой | Что | Где | На доске |
+|------|-----|-----|----------|
+| **A. Метрики** | RPS, latency, RPO/RTO, storage | §2.1–§2.5 | **цифры**, не «выбор архитектуры» |
+| **B. Pillars** | availability, DR, scalability… | **§2.6 + §2.7** | **отметить каждый пункт** catalog |
+| **C. Implementation** | cache-aside, Kafka, semi-sync repl | §3.4 TOP-3 → §4 | **имена после trade-off gate** |
+
+TOP-3 выбирается **только из слоя B** (pillars), не из 47 trade-off файлов напрямую.
+
+### START · AGENDA · DETAIL
+
+| Роль | Секция | Уровень | Вопрос |
+|------|--------|---------|--------|
+| **START** | §2.8 | entry point | С чего **начать** Deep Dive? (bottleneck) |
+| **AGENDA** | §3.4 | pillar list | Что **обязательно** проговорить? (TOP-3) |
+| **DETAIL** | §4.1–4.4 | trade-off | Как **обосновать** выбор? (tech names) |
+
+§2.8 и §3.4 не противоречат: START может быть §4.2, AGENDA может включать pillar из §4.3.
+
+```mermaid
+flowchart TD
+    N22["§2.2 Цифры RPS/storage"]
+    N26["§2.6 Pillars ATAM"]
+    N27["§2.7 Processing + DR tier"]
+    N28["§2.8 Bottleneck"]
+    H34["§3.4 TOP-3 из пробелов pillars"]
+    D4["§4 Deep Dive реализует pillars"]
+
+    N22 --> N26
+    N26 --> N27
+    N27 --> N28
+    N26 --> H34
+    N28 --> D4
+    H34 --> D4
+```
+
+### Master Catalog — pillars (§2.6)
+
+| ID | Категория | Pillar | Выбирается в | Детали в Deep Dive |
+|----|-----------|--------|--------------|-------------------|
+| O1 | Operational | **Availability** | §2.6 | §4.2 replication |
+| O2 | Operational | **Continuity** | §2.6 | §4.1 / pull deployment |
+| O3 | Operational | **DR** | §2.6 + **§2.7 tier** | §4.4 DR |
+| S1 | Structural | **Scalability** | §2.6 | §4.2 cache, shard, CDN |
+| S2 | Structural | **Consistency (CAP)** | §2.6 | §4.4 CAP |
+| X1 | Cross-cutting | **Caching** | §2.6 | §4.2 caching-patterns |
+| X2 | Cross-cutting | **Processing model** | **§2.7** | §4.3 messaging, batch |
+| X3 | Cross-cutting | **Observability** | §2.5 + §2.6 | pull observability |
+| X4 | Cross-cutting | **Security / Auth** | §2.6 | §4.1 gateway |
+| X5 | Cross-cutting | **Distributed TX** | §2.6 | §4.3 saga-outbox |
+
+**Pull (не в §2.6 pass):** Extensibility, Maintainability, Portability → [Pull-on-demand](#pull-on-demand-не-на-доске-по-умолчанию).
+
+**Правило репликации:** Replication = HA/DR (O1, O3), не read scale. Read throughput → X1/S1 (CDN, cache).
+
+### Типичные TOP-3 по типу задачи
+
+| Тип | Pillar IDs | Implementation (§4) |
+|-----|------------|---------------------|
+| Read-heavy (Instagram) | **X1** · **S1** · **X2** | cache-aside, CDN, push async |
+| CP/money (PayPal) | **O3** · **S2** · **X5** | semi-sync repl, CP ledger, saga+outbox |
+| Write-heavy (VK) | **S1** · **O3** · **X2** | shard, async repl, async messaging |
+
+## Примеры
 
 | Пример | Паттерн |
 |--------|---------|
-| [instagram-feed.md](examples/instagram-feed.md) | read-heavy · CDN · sharding · cache-aside |
-| [paypal-payments.md](examples/paypal-payments.md) | transactional · **saga** · **outbox** · idempotency |
-| [vk-social.md](examples/vk-social.md) | social graph · messaging · capstone §1–7 |
+| [instagram-feed.md](examples/instagram-feed.md) | read-heavy · X1+S1+X2 |
+| [paypal-payments.md](examples/paypal-payments.md) | CP · O3+S2+X5 |
+| [vk-social.md](examples/vk-social.md) | write-heavy · S1+O3+X2 |
 
 ## Модули знаний
 
-| Модуль | Workflow | Trade-offs / examples |
-|--------|----------|------------------------|
-| 1. Компоненты | шаг 2, 5–6 | LB, cache, gateway, observability |
-| 2. Хранение | шаг 4 | indexing, sql-nosql, norm-denorm |
-| 3. Распределённое | шаг 4–5 | replication, sharding, CAP |
-| 4. Паттерны | шаг 5–6 | saga, messaging, resilience, deployment |
+| Модуль | Шаг workflow | Trade-offs / examples |
+|--------|--------------|------------------------|
+| 1. Компоненты | 2 NFR, 3 HLD, 4 Deep Dive | LB, cache, gateway, observability |
+| 2. Хранение | 3 (schema), 4.2 | indexing, sql-nosql, norm-denorm |
+| 3. Распределённое | 2 NFR, 4.2–4.4 | replication, sharding, CAP |
+| 4. Паттерны | 2.6 pillars, 3 TOP-3, 4.3 | saga, messaging, resilience |
 | 5–6. Кейсы | examples | instagram, paypal |
-| 7. Capstone | example §1–7 | vk-social |
+| 7. Capstone | vk example | vk-social |
 
 ## Шаблон trade-off
 
@@ -49,107 +132,94 @@
 
 ## Trade-offs
 
-47 тем. Группировка = чеклист [шага 2](workflow/02-non-functional-requirements.md); API / Data / HLD — шаги 3–5.
+47 тем. **Когда открывать:** шаг 2 NFR (§2.6 pillars, §2.7 processing/DR) · §3.4 TOP-3 pillars → §4 implementation · Deep Dive pull · по запросу интервьюера.
 
-### Шаг 2 — по блокам NFR
+### Шаг 2 NFR — §2.6 pillars + §2.7 processing/DR
 
-#### Performance
+| Pillar | Trade-off |
+|--------|-----------|
+| O1 Availability | [replication-sync-async](trade-offs/data/replication-sync-async.md) |
+| O3 DR | [disaster-recovery-pattern](trade-offs/architecture/disaster-recovery-pattern.md) · [availability-slo-rpo-rto](trade-offs/constraints/availability-slo-rpo-rto.md) |
+| S1 Scalability | [sharding-partitioning](trade-offs/data/sharding-partitioning.md) · [vertical-vs-horizontal-scaling](trade-offs/constraints/vertical-vs-horizontal-scaling.md) |
+| S2 Consistency | [cap-pacelc-distributed](trade-offs/architecture/cap-pacelc-distributed.md) |
+| X1 Caching | [caching-patterns](trade-offs/architecture/caching-patterns.md) · [cdn-object-storage-pattern](trade-offs/architecture/cdn-object-storage-pattern.md) |
+| X2 Processing | [messaging-patterns](trade-offs/architecture/messaging-patterns.md) · [batch-vs-stream](trade-offs/architecture/batch-vs-stream.md) |
+| X4 Security | [resilience-backpressure](trade-offs/architecture/resilience-backpressure.md) |
+| X5 Distributed TX | [saga-vs-outbox](trade-offs/architecture/saga-vs-outbox.md) |
 
-| Тема | Файл |
-|------|------|
-| Latency vs throughput | [latency-vs-throughput](trade-offs/constraints/latency-vs-throughput.md) |
-| Performance vs cost | [performance-vs-cost](trade-offs/constraints/performance-vs-cost.md) |
-| CDN + object storage | [cdn-object-storage-pattern](trade-offs/architecture/cdn-object-storage-pattern.md) |
+### §3.4 TOP-3 pillars → §4 implementation
 
-#### Scalability
+| Pillar | Implementation trade-offs |
+|--------|---------------------------|
+| X1 Caching | [caching-patterns](trade-offs/architecture/caching-patterns.md) · [push-vs-pull-delivery](trade-offs/api/push-vs-pull-delivery.md) |
+| S1 Scalability | [sharding-partitioning](trade-offs/data/sharding-partitioning.md) · [sql-vs-nosql-paradigm](trade-offs/data/sql-vs-nosql-paradigm.md) |
+| X2 Processing | [messaging-patterns](trade-offs/architecture/messaging-patterns.md) · [sync-async-messaging](trade-offs/api/sync-async-messaging.md) |
+| O3 DR | [disaster-recovery-pattern](trade-offs/architecture/disaster-recovery-pattern.md) · [replication-sync-async](trade-offs/data/replication-sync-async.md) |
+| S2 Consistency | [cap-pacelc-distributed](trade-offs/architecture/cap-pacelc-distributed.md) |
+| X5 Distributed TX | [saga-vs-outbox](trade-offs/architecture/saga-vs-outbox.md) · [orchestration-choreography-saga](trade-offs/architecture/orchestration-choreography-saga.md) |
 
-| Тема | Файл |
-|------|------|
-| Vertical vs horizontal | [vertical-vs-horizontal-scaling](trade-offs/constraints/vertical-vs-horizontal-scaling.md) |
-| Scalability vs performance | [scalability-vs-performance](trade-offs/constraints/scalability-vs-performance.md) |
-| Autoscaling vs fixed | [autoscaling-vs-fixed-capacity](trade-offs/constraints/autoscaling-vs-fixed-capacity.md) |
-| Caching patterns | [caching-patterns](trade-offs/architecture/caching-patterns.md) |
-| Cache eviction | [cache-eviction-policies](trade-offs/architecture/cache-eviction-policies.md) |
-
-#### Consistency
-
-| Тема | Файл |
-|------|------|
-| CAP / PACELC | [cap-pacelc-distributed](trade-offs/architecture/cap-pacelc-distributed.md) |
-| Consistency как NFR | [consistency-as-nfr](trade-offs/constraints/consistency-as-nfr.md) |
-
-#### Reliability
+### Deep Dive §4.1 — Edge: LB + Gateway (O2, X4)
 
 | Тема | Файл |
 |------|------|
-| SLA, RPO/RTO | [availability-slo-rpo-rto](trade-offs/constraints/availability-slo-rpo-rto.md) |
-| Disaster recovery | [disaster-recovery-pattern](trade-offs/architecture/disaster-recovery-pattern.md) |
+| Load balancing L4/L7 | [load-balancing-l4-l7](trade-offs/architecture/load-balancing-l4-l7.md) |
 | Resilience & backpressure | [resilience-backpressure](trade-offs/architecture/resilience-backpressure.md) |
-
-#### Observability
-
-| Тема | Файл |
-|------|------|
-| Metrics, logs, traces | [observability-architecture](trade-offs/architecture/observability-architecture.md) |
-| Monitoring tools | [monitoring-tools](trade-offs/technologies/monitoring-tools.md) |
-
-#### Processing
-
-| Тема | Файл |
-|------|------|
-| Batch vs stream | [batch-vs-stream](trade-offs/architecture/batch-vs-stream.md) |
-
-#### Security
-
-Отдельных файлов нет — auth, rate limit, signed URL фиксируем в NFR и [API gateways](trade-offs/technologies/api-gateways.md).
-
-#### Infra (итог)
-
-| Тема | Файл |
-|------|------|
-| Выбор технологий | [technology-selection-meta](trade-offs/technologies/technology-selection-meta.md) |
-| Databases | [databases](trade-offs/technologies/databases.md) |
-| Caches | [caches](trade-offs/technologies/caches.md) |
-| Message brokers | [message-brokers](trade-offs/technologies/message-brokers.md) |
-| Object storage | [object-storage](trade-offs/technologies/object-storage.md) |
+| Deployment / release | [deployment-release-strategies](trade-offs/architecture/deployment-release-strategies.md) |
 | API gateways | [api-gateways](trade-offs/technologies/api-gateways.md) |
 | Load balancers | [load-balancers-proxies](trade-offs/technologies/load-balancers-proxies.md) |
 
-### Шаг 3 — API
-
-| Тема | Файл |
-|------|------|
-| REST vs gRPC vs GraphQL | [rest-grpc-graphql](trade-offs/api/rest-grpc-graphql.md) |
-| Sync vs async | [sync-async-messaging](trade-offs/api/sync-async-messaging.md) |
-| RPC vs queue | [rpc-vs-queue](trade-offs/api/rpc-vs-queue.md) |
-| Push vs pull | [push-vs-pull-delivery](trade-offs/api/push-vs-pull-delivery.md) |
-| Real-time transport | [realtime-transport](trade-offs/api/realtime-transport.md) |
-| Write idempotency | [write-api-idempotency](trade-offs/api/write-api-idempotency.md) |
-| API versioning | [api-versioning-evolution](trade-offs/api/api-versioning-evolution.md) |
-| Pagination | [pagination-cursor-offset](trade-offs/data/pagination-cursor-offset.md) |
-
-### Шаг 4 — Data
+### Deep Dive §4.2 — Data: DB + Cache (S1, X1, O1)
 
 | Тема | Файл |
 |------|------|
 | SQL vs NoSQL | [sql-vs-nosql-paradigm](trade-offs/data/sql-vs-nosql-paradigm.md) |
 | Norm vs denorm | [normalization-denormalization](trade-offs/data/normalization-denormalization.md) |
 | Indexing | [indexing-strategy](trade-offs/data/indexing-strategy.md) |
-| Sharding vs partition | [sharding-partitioning](trade-offs/data/sharding-partitioning.md) |
+| Sharding / partition | [sharding-partitioning](trade-offs/data/sharding-partitioning.md) |
 | Replication sync/async | [replication-sync-async](trade-offs/data/replication-sync-async.md) |
 | Master-slave vs multi-master | [master-slave-multi-master](trade-offs/data/master-slave-multi-master.md) |
+| Caching patterns | [caching-patterns](trade-offs/architecture/caching-patterns.md) |
+| Cache eviction | [cache-eviction-policies](trade-offs/architecture/cache-eviction-policies.md) |
+| CDN + object storage | [cdn-object-storage-pattern](trade-offs/architecture/cdn-object-storage-pattern.md) |
+| Pagination | [pagination-cursor-offset](trade-offs/data/pagination-cursor-offset.md) |
+| Databases | [databases](trade-offs/technologies/databases.md) |
+| Caches | [caches](trade-offs/technologies/caches.md) |
+| Object storage | [object-storage](trade-offs/technologies/object-storage.md) |
 
-### Шаг 5 — High-Level Design
+### Deep Dive §4.3 — Async, Messaging & Batch (X2, X5)
 
 | Тема | Файл |
 |------|------|
-| Monolith vs micro | [monolith-microservices](trade-offs/architecture/monolith-microservices.md) |
-| Stateless vs stateful | [stateless-stateful](trade-offs/architecture/stateless-stateful.md) |
-| Load balancing L4/L7 | [load-balancing-l4-l7](trade-offs/architecture/load-balancing-l4-l7.md) |
-| Messaging | [messaging-patterns](trade-offs/architecture/messaging-patterns.md) |
+| Messaging patterns | [messaging-patterns](trade-offs/architecture/messaging-patterns.md) |
+| Batch vs stream | [batch-vs-stream](trade-offs/architecture/batch-vs-stream.md) |
+| Message brokers | [message-brokers](trade-offs/technologies/message-brokers.md) |
 | Saga vs outbox | [saga-vs-outbox](trade-offs/architecture/saga-vs-outbox.md) |
 | Orchestration vs choreography | [orchestration-choreography-saga](trade-offs/architecture/orchestration-choreography-saga.md) |
-| Concurrency vs parallelism | [concurrency-vs-parallelism](trade-offs/architecture/concurrency-vs-parallelism.md) |
-| Distributed coordination | [distributed-coordination](trade-offs/architecture/distributed-coordination.md) |
-| ETL pipeline | [etl-pipeline-pattern](trade-offs/architecture/etl-pipeline-pattern.md) |
+| Sync vs async API | [sync-async-messaging](trade-offs/api/sync-async-messaging.md) |
+| RPC vs queue | [rpc-vs-queue](trade-offs/api/rpc-vs-queue.md) |
+
+### Deep Dive §4.4 — DR, CAP & Failures (O3, S2)
+
+| Тема | Файл |
+|------|------|
+| CAP / PACELC | [cap-pacelc-distributed](trade-offs/architecture/cap-pacelc-distributed.md) |
+| Consistency as NFR | [consistency-as-nfr](trade-offs/constraints/consistency-as-nfr.md) |
+| SLA, RPO/RTO | [availability-slo-rpo-rto](trade-offs/constraints/availability-slo-rpo-rto.md) |
+| Disaster recovery | [disaster-recovery-pattern](trade-offs/architecture/disaster-recovery-pattern.md) |
 | Deployment / release | [deployment-release-strategies](trade-offs/architecture/deployment-release-strategies.md) |
+
+### Pull-on-demand (не на доске по умолчанию)
+
+| Тема | Файл |
+|------|------|
+| REST vs gRPC vs GraphQL | [rest-grpc-graphql](trade-offs/api/rest-grpc-graphql.md) |
+| Write idempotency | [write-api-idempotency](trade-offs/api/write-api-idempotency.md) |
+| Real-time transport | [realtime-transport](trade-offs/api/realtime-transport.md) |
+| API versioning | [api-versioning-evolution](trade-offs/api/api-versioning-evolution.md) |
+| Latency vs throughput | [latency-vs-throughput](trade-offs/constraints/latency-vs-throughput.md) |
+| Vertical vs horizontal | [vertical-vs-horizontal-scaling](trade-offs/constraints/vertical-vs-horizontal-scaling.md) |
+| Observability | [observability-architecture](trade-offs/architecture/observability-architecture.md) |
+| ETL pipeline | [etl-pipeline-pattern](trade-offs/architecture/etl-pipeline-pattern.md) |
+| Stateless vs stateful | [stateless-stateful](trade-offs/architecture/stateless-stateful.md) |
+| Technology selection | [technology-selection-meta](trade-offs/technologies/technology-selection-meta.md) |
+| Monolith vs micro | [monolith-microservices](trade-offs/architecture/monolith-microservices.md) |

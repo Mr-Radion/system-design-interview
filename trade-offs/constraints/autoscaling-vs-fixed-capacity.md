@@ -20,7 +20,7 @@ related:
 
 ## Цепочка решений
 
-Traffic pattern → fixed vs HPA/ASG → шаг 2 Infra
+Traffic pattern → fixed vs HPA/ASG → Deep Dive §4.x
 
 ## Auto-scaling (динамическое масштабирование)
 

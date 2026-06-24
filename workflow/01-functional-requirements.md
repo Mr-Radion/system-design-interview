@@ -1,65 +1,40 @@
-# Шаг 1 — Функциональные требования
+# Шаг 1 — Requirements (5–8 min)
 
 ← [FRAMEWORK](../FRAMEWORK.md)
 
-## Что фиксируем
+## Что на доске
 
 - **Overview** — одна строка: главная история / pipeline
-- **FR-1…FR-N** — требование + пояснение + edge cases
-- **UC → FR** — маппинг use case на FR (не дублировать)
+- **FR-1…FR-N** — **4–6 max** на доске (остальное — Out of scope)
 - **Out of scope** — явно что не делаем
-- Логическая ER (связи, без типов полей)
 
-## Шаблон §1 (эталон — GM-346 style)
+**Не на доске в шаге 1:** SLA/SLO (→ шаг 2 NFR), UC→FR таблицы, ER с полями — §3 HLD / §4 Deep Dive по запросу.
+
+## Спроси интервьюера
+
+| Вопрос | Зачем |
+|--------|-------|
+| Scale? DAU / users? | → шаг 2 NFR |
+| Geo? multi-region? | CDN, sharding |
+| Read vs write? | bottleneck hint |
+| Consistency? money / social? | CAP в §2.6 / Deep Dive §4.4 |
+
+## Шаблон §1
 
 ```markdown
-**Overview:** post → fan-out → feed cache · bottleneck = read bandwidth
+**Overview:** post → fan-out → feed cache
 
 | ID | Требование | Пояснение |
 |----|------------|-----------|
-| **FR-1** | User загружает пост (текст + 1 фото) | Sync ACK metadata; media — presigned upload, не через API body |
-| **FR-3** | Like/unlike идемпотентен | Double-click не создаёт второй like |
-| **FR-N** | … | **⚠️ Собес:** offset vs cursor pagination |
-
-### UC → FR
-
-| UC | FR |
-|----|-----|
-| UC1 Загрузить пост | FR-1, FR-7, FR-8 |
-| UC2 Лента | FR-2, FR-5, FR-6 |
+| **FR-1** | User загружает пост (текст + 1 фото) | Sync ACK metadata; media — presigned upload |
+| **FR-2** | Лента подписок — reverse chrono | Pagination; stale OK |
+| **FR-3** | Like/unlike идемпотентен | Double-click safe |
+| **FR-4** | Celebrity fan-out async | N followers — не sync в POST |
 
 **Out of scope:** DMs, search, geo feed
-
-**ER:** User 1──M Post · User M──N User
 ```
 
-**10–12 FR** на capstone-пример; **8+** на простой. Каждый FR = **что** + **почему/edge case**, не одна строка.
-
-## Акторы
-
-| Актор | Роль |
-|-------|------|
-| Пользователь | *кто инициирует действие* |
-| Client / UI | *приложение, формы, вызовы API* |
-| Backend | *сервис домена* |
-| Cron / Scheduler | *ночные job, очистка, retry, отчёты* |
-| *внешняя система* | *платежи, storage, …* |
-
-## Реестр UC
-
-| UC | Название | Приоритет | FR |
-|----|----------|-----------|-----|
-| UC1 | *Глагол + Объект* | Must | FR-1, … |
-| UC2 | … | Must | FR-2, … |
-| UC3 | … | Should | — |
-
-Формулировка UC: **«Инфинитив + Объект»** (Просмотреть список, Загрузить файл).
-
-## Интеграции
-
-| Система | Зачем |
-|---------|-------|
-| … | … |
+Каждый FR = **что** + **один edge case**, не одна строка.
 
 ---
 

@@ -136,7 +136,7 @@ Bilingual RU/EN — ключевые термины по [47 trade-offs](FRAMEWO
 
 ---
 
-## Technologies — что выбирать на §7 {#technologies}
+## Technologies — что выбирать в Deep Dive §4.x {#technologies}
 
 | Термин RU | EN | Кратко | Trade-off |
 |-----------|-----|--------|-----------|
@@ -161,4 +161,4 @@ Bilingual RU/EN — ключевые термины по [47 trade-offs](FRAMEWO
 | `Storage = rows × row_size × retention` | Disk planning |
 | `Replication lag ≤ read staleness SLO` | Когда replica OK для read |
 
-→ latency порядки величин: [workflow/02](workflow/02-non-functional-requirements.md)
+→ latency порядки величин: [workflow/02-non-functional-requirements](workflow/02-non-functional-requirements.md)

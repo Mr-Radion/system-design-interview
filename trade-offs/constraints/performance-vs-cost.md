@@ -8,7 +8,7 @@ related:
 
 # Performance vs Cost (Производительность vs Стоимость)
 
-> **Главное:** Budget — constraint шага 2. Вход — SLA и ceiling $. Выход — right-size infra vs premium.
+> **Главное:** Budget — constraint шаг 2 NFR. Вход — SLA и ceiling $. Выход — right-size infra vs premium.
 
 ## Что определяет выбор
 
@@ -20,7 +20,7 @@ related:
 
 ## Цепочка решений
 
-Шаг 2 budget + SLA → managed vs self-hosted → шаг 2 Infra
+шаг 2 NFR budget + SLA → managed vs self-hosted → Deep Dive §4.x
 
 ## Performance (производительность) vs Cost (стоимость)
 

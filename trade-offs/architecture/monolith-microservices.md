@@ -23,7 +23,7 @@ related:
 
 ## Цепочка решений
 
-Шаг 2 NFR → шаг 5 pattern (deployment) → шаг 2 Infra tech
+шаг 2 NFR → HLD §3.4 TOP-3 → Deep Dive §4.x (tech)
 
 ## Monolith
 
@@ -96,7 +96,7 @@ Client → **single endpoint** (API (Application Programming Interface, прог
 
 Gateway also provides: **rate limiting, caching, auth** — cross-cutting, not business logic.
 
-Product choice: см. [Infra-таблицу шага 2](../../workflow/02-non-functional-requirements.md)
+Product choice: см. [Infra-таблицу шаг 2 NFR](../../workflow/02-non-functional-requirements.md)
 
 **Источник:** [часть 3](https://habr.com/ru/articles/885054/)
 

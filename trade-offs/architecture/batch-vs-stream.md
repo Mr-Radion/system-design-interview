@@ -18,7 +18,7 @@ related:
 
 ## Цепочка решений
 
-Шаг 2 NFR → шаг 5 processing pattern → шаг 2 Infra tech
+шаг 2 NFR → Deep Dive §4.3 processing → Deep Dive §4.x (tech)
 
 ## Batch Processing (Hadoop, Spark, EMR)
 

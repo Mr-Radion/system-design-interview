@@ -1,325 +1,114 @@
 # Пример: Instagram-like feed
 
-← [FRAMEWORK.md](../FRAMEWORK.md)
+← [FRAMEWORK.md](../FRAMEWORK.md) · [instagram-feed.md](instagram-feed.md)
 
-**Overview:** post → async fan-out → feed cache · read bandwidth ~20 GB/s >> write → CDN + cache-aside обязательны
+**Overview:** post → async fan-out → feed cache · read bandwidth ~20 GB/s >> write
 
 **50M users · без geo · 1 пост / 5 дней · лента 5×/день · ~700 KB/пост**
 
 ---
 
-## 1. FR
+## 1. FR (5–8 min)
 
 | ID | Требование | Пояснение |
 |----|------------|-----------|
-| **FR-1** | User загружает пост (текст ~100 симв. + 1 фото) | Sync ACK после metadata в БД; тело фото — не через API |
-| **FR-2** | Лента подписок — reverse chronological | Пагинация; 10 постов на страницу |
-| **FR-3** | Like / unlike **идемпотентен** | Double-click / retry не создаёт второй like |
-| **FR-4** | Follow / unfollow | Strong consistency на graph edge; unfollow сразу убирает из ленты |
-| **FR-5** | Celebrity fan-out | User с миллионами followers — push в N лент async, не sync в POST |
-| **FR-6** | Stale feed допустим | Лента может отставать на секунды; не financial data |
-| **FR-7** | Duplicate post retry безопасен | Повтор `write_post` с тем же idempotency key → тот же post_id |
-| **FR-8** | Media upload через presigned URL | Client → object storage напрямую; API только metadata + URL |
-| **FR-9** | Read >> write по bandwidth | ~20 GB/s read vs ~80 MB/s write — edge cache не опция, а must |
-| **FR-10** | Комментарии к посту | Append-only; out of MVP depth — только упоминание в ER |
-| **FR-11** | **⚠️ Собес:** pagination и hot user | Уточнить: offset vs cursor; celebrity = отдельный fan-out path |
+| **FR-1** | User загружает пост (текст + 1 фото) | Sync ACK metadata; media — presigned upload |
+| **FR-2** | Лента подписок — reverse chrono | Pagination; stale OK (секунды) |
+| **FR-3** | Like/unlike **идемпотентен** | Double-click safe |
+| **FR-4** | Follow/unfollow — strong consistency | Unfollow сразу убирает из ленты |
+| **FR-5** | Celebrity fan-out async | N followers — не sync в POST |
+| **FR-6** | Read >> write по bandwidth | ~20 GB/s read vs ~80 MB/s write |
 
-### UC → FR
-
-| UC | FR |
-|----|-----|
-| UC1 Загрузка поста | FR-1, FR-7, FR-8 |
-| UC2 Лента | FR-2, FR-5, FR-6, FR-9 |
-| UC3 Лайки, комментарии | FR-3, FR-10 |
-| UC4 Подписка | FR-4 |
-
-**Out of scope:** DMs, search по caption, geo feed, semantic «похожие посты», video transcode
-
-**ER:** User 1──M Post · User M──N User · Post 1──M Like, Comment
+**Out of scope:** DMs, search, geo feed, video transcode
 
 ---
 
-## 2. NFR
+## 2. NFR (5–7 min)
 
-### 2.1 Входные допущения
+### 2.2 Расчёты
 
-| Параметр | Значение |
-|----------|----------|
-| Users | 50M |
-| Posts | 1 / 5 дней / user |
-| Feed reads | 5×/день, 10 постов в ответе |
-| Media/post | ~700 KB (фото) |
-| Geo | нет |
+| Метрика | Формула | Результат |
+|---------|---------|-----------|
+| Users | — | **50M** |
+| Write QPS | 50M ÷ 5 ÷ 86_400 | **~115** |
+| Read QPS | 50M × 5 ÷ 86_400 | **~2_900** |
+| Read:Write | | **~25 : 1** |
+| Bandwidth read | 2_900 × 10 × 700 KB | **~20 GB/s** |
+| Storage / year | 80 MB/s × 86_400 × 365 | **~2.5 TB** |
 
-**Драйвер дизайна:** FR-9 — read bandwidth доминирует; FR-5 — fan-out async, не блокирует POST.
+**Драйвер:** FR-6 — read bandwidth доминирует.
 
-### 2.2 Предварительные расчёты
+### 2.3 SLA / SLO
 
-| Метрика | Допущение | Формула | Результат | FR |
-|---------|-----------|---------|-----------|-----|
-| **Пользователи** | 50M users | — | **50M** | — |
-| **Частота** | 1 post/5d · 5 feed reads/day · 10 posts/response | — | — | FR-1, FR-2 |
-| **RPS write** | 50M ÷ 5 ÷ 86_400 | — | **~115** | — |
-| **RPS read** | 50M × 5 ÷ 86_400 | — | **~2_900** | FR-9 |
-| **Bandwidth write** | 115 × 700 KB | — | **~80 MB/s** | — |
-| **Bandwidth read (media)** | 2_900 × 10 × 700 KB | — | **~20 GB/s** | FR-9 bottleneck |
-| **Объём данных** | write bandwidth × time | 80 MB/s × 86_400 × 365 | **~2.5 TB/год** | — |
-
-**Вывод:** FR-9 → read bandwidth bottleneck → §5 Scalability (CDN+cache); write RPS низкий.
-
-### 2.3 SLO и целевые метрики
-
-| Метрика | Цель | Примечание |
-|---------|------|------------|
-| Latency GET feed p50 / p95 / p99 | ~190 ms / ~500 ms / **≤ 2 s** | sync |
-| Latency POST post p99 | **≤ 2 s** | sync |
-| SLA uptime | **99.9%** | / month |
-| SLO | 95% feed requests < 500 ms | SRE |
-| RPO ленты | секунды | stale OK |
-| RTO | < 15 min | |
-
-**GET feed (FR-2) — breakdown:**
-
-| Этап | p50 | p99 |
-|------|-----|-----|
-| CDN (media thumbs) | ~20 ms | ~80 ms |
-| API + auth | ~15 ms | ~40 ms |
-| Feed cache hit | ~5 ms | ~20 ms |
-| Cache miss → replica + assemble | ~150 ms | ~800 ms |
-| **Итого** | **~190 ms** | **≤ 2 s** |
-
-**POST post (FR-1):**
-
-| Этап | p50 | p99 |
-|------|-----|-----|
-| Metadata write PG | ~80 ms | ~300 ms |
-| Presigned URL issue | ~10 ms | ~30 ms |
-| **Итого** | **~90 ms** | **≤ 2 s** |
-
-**Async — клиент не ждёт:**
-
-| Процесс | E2E SLO | FR |
-|---------|---------|-----|
-| Fan-out поста в ленты followers | секунды OK | FR-5 |
-| Celebrity fan-out (N > 10K) | минуты OK | FR-5 |
+| Метрика | Цель |
+|---------|------|
+| GET feed p50 / p95 / p99 | ~190 ms / ~500 ms / **≤ 2 s** |
+| POST post p99 | **≤ 2 s** |
+| SLA uptime | **99.9%** |
+| SLO | 95% feed requests < 500 ms |
+| RPO ленты | секунды (stale OK) · RTO < 15 min |
 
 ### 2.4 Throughput
 
-Peak write ~115 w/s · read ~2_900 r/s · **burst ×5** prime time (~14.5K r/s) · headroom ×2 на CDN.
+Peak read ~2_900 r/s · write ~115 w/s · burst ×5 prime time · headroom ×2 на CDN.
 
 ### 2.5 Observability
 
-| Метрика | Зачем | FR |
-|---------|-------|-----|
-| `feed_p99_latency_ms` | SLO §2.3 | FR-2 |
-| `feed_cache_hit_rate` | CDN / cache health | FR-9 |
-| `fan_out_lag_seconds` | Stale feed detection | FR-5 |
-| `post_write_p99_ms` | Upload SLO | FR-1 |
-| `cdn_origin_bandwidth_mbps` | Bottleneck alert | FR-9 |
+| Метрика | Зачем |
+|---------|-------|
+| `feed_p99_latency_ms` | SLO §2.3 |
+| `feed_cache_hit_rate` | cache health |
+| `cdn_origin_bandwidth_mbps` | bottleneck alert |
+
+### 2.6 Master Catalog — pillars
+
+| ID | Pillar | ✅ / — | Направление | Почему §2.2/FR | TOP-3? |
+|----|--------|--------|-------------|----------------|--------|
+| O1 | Availability | ✅ | async repl — HA | SLA 99.9% | — |
+| O2 | Continuity | — | — | не спрашивали | — |
+| O3 | DR | ✅ | warm tier | RPO сек, RTO 15m | — |
+| S1 | Scalability | ✅ | read path 20 GB/s | §2.2 bandwidth | **да** |
+| S2 | Consistency | ✅ | strong follow / eventual feed | FR-4, FR-6 | — |
+| X1 | Caching | ✅ | CDN + cache-aside | read hot path | **да** |
+| X2 | Processing | ✅ | async fan-out | FR-5 | **да** |
+| X3 | Observability | ✅ | §2.5 metrics | SLO | — |
+| X4 | Security | — | — | out of scope | — |
+| X5 | Distributed TX | — | — | no money | — |
+
+### 2.7 Processing paths + DR tier
+
+| Path | Core UC | Когда | Механизм |
+|------|---------|-------|----------|
+| **Sync** | GET feed, POST follow | user ждёт ответ | API → Redis / PG |
+| **Async** | celebrity fan-out | FR-5, N followers | Kafka pub/sub |
+| **Batch** | — | — | N/A |
+
+**DR tier (O3):** Warm — RPO секунды, RTO 15 min · async repl standby.
+
+### 2.8 Bottleneck → START §4
+
+**START:** read bandwidth ~20 GB/s → **§4.2** (pillars X1, S1) · **AGENDA:** §3.4 — также X2 → §4.3
 
 ---
 
-## 3. API
+## 3. HLD (12–15 min)
 
-| Вызов | UC | Заметка |
-|-------|-----|---------|
-| `write_post(params)` | UC1 | sync · [idempotency](../trade-offs/api/write-api-idempotency.md) |
-| `upload_image(image)` | UC1 | presigned S3 |
-| `get_feed(user_id, offset)` | UC2 | [offset→cursor](../trade-offs/data/pagination-cursor-offset.md) · [push/pull](../trade-offs/api/push-vs-pull-delivery.md) |
-| `subscription(user_id, type)` | UC4 | follow / unfollow |
+### 3.1 API
 
-Протокол: **REST** к клиенту ([rest-grpc-graphql](../trade-offs/api/rest-grpc-graphql.md)) · publish поста → **async event** ([sync-async](../trade-offs/api/sync-async-messaging.md))
+| Endpoint | Зачем | Sync/Async |
+|----------|-------|------------|
+| `POST /posts` | upload metadata | sync ACK |
+| `GET /feed` | лента подписок | sync |
+| `POST /follow` | graph edge | sync |
 
----
+### 3.2 Data
 
-## 4. Data
-
-**PostgreSQL** — users, posts, follows, likes · **cache** — feed lists · **object store** — фото
-
-### ER — core entities
-
-```mermaid
-erDiagram
-    USER {
-        uuid id PK
-        string email UK
-        string username
-    }
-    FOLLOW {
-        uuid follower_id FK
-        uuid followee_id FK
-        timestamp created_at
-    }
-    POST {
-        uuid id PK
-        uuid author_id FK
-        text caption
-        timestamp created_at
-    }
-    LIKE {
-        uuid user_id FK
-        uuid post_id FK
-        timestamp created_at
-    }
-    COMMENT {
-        uuid id PK
-        uuid post_id FK
-        uuid author_id FK
-        text body
-    }
-    MEDIA {
-        uuid id PK
-        uuid post_id FK
-        string object_key
-    }
-    FEED_ITEM {
-        uuid viewer_id FK
-        uuid post_id FK
-        timestamp rank
-    }
-
-    USER ||--o{ FOLLOW : follower
-    USER ||--o{ FOLLOW : followee
-    USER ||--o{ POST : writes
-    USER ||--o{ LIKE : gives
-    POST ||--o{ LIKE : receives
-    POST ||--o{ COMMENT : has
-    USER ||--o{ COMMENT : writes
-    POST ||--o{ MEDIA : attaches
-    USER ||--o{ FEED_ITEM : timeline
-    POST ||--o{ FEED_ITEM : in
+```
+User 1──M Post · User M──N User · Post 1──M Like
+Store: PostgreSQL (graph) + Object storage (media) + Redis (feed denorm)
 ```
 
-`FOLLOW` — M:N · `FEED_ITEM` — denorm для Redis (UC2) · `LIKE` — composite PK `(user_id, post_id)`
-
-### Размещение по store
-
-```mermaid
-flowchart TB
-    subgraph pg [PostgreSQL — 8 shards]
-        USER
-        FOLLOW
-        POST
-        LIKE
-        COMMENT
-    end
-
-    subgraph cache [Redis — denorm]
-        FEED_ITEM
-        LikeBuf[like write-behind buffer]
-    end
-
-    subgraph obj [Object Storage + CDN]
-        MEDIA
-    end
-
-    SocialSvc[Social Service] --> pg
-    PostSvc[Post Service] --> pg
-    FeedSvc[Feed Service] --> cache
-    FeedSvc --> pg
-    MediaSvc[Media Service] --> obj
-    MediaSvc --> pg
-    LikeSvc[Like path] --> LikeBuf
-    LikeBuf --> pg
-```
-
-metadata в PG · фото blob в S3 · лента hot users в Redis
-
-### Шардирование — hash by user_id
-
-```mermaid
-flowchart TB
-    Router["Shard Router<br/>hash user_id mod 8"] --> S1[("Shard 1")]
-    Router --> S2[("Shard 2")]
-    Router --> S8[("Shard 8")]
-
-    Note["posts / follows / likes — один shard per user<br/>cross-shard JOIN нет"]
-    Router -.-> Note
-```
-
-shard key = `user_id` · celebrity fan-out через Kafka, не scatter-gather → [sharding](../trade-offs/data/sharding-partitioning.md)
-
-### Репликация — HA + optional read offload
-
-```mermaid
-flowchart LR
-    Writers[Post / Social write] -->|write| Master[("Master PG")]
-    Master -->|async| R1[("Replica 1")]
-    Master -->|async| R2[("Replica 2")]
-    FeedReaders[Feed read] --> R1
-    FeedReaders --> R2
-```
-
-follows / profile → **primary** · feed timeline → **replica** (stale ≤ replication lag)
-
-| Тема | ✅ |
-|------|-----|
-| SQL для графа и транзакций ([sql-nosql](../trade-offs/data/sql-vs-nosql-paradigm.md)) | PostgreSQL |
-| Денорм feed list в Redis ([norm-denorm](../trade-offs/data/normalization-denormalization.md)) | да |
-
-### Indexing trade-offs → выбор
-
-| Запрос (FR) | NFR | Алгоритм | Форма | Механика | ✅ |
-|-------------|-----|----------|-------|----------|-----|
-| UC2 лента `WHERE user_id=? ORDER BY created_at DESC` | read 20:1 · p99 ≤ 2s | B-Tree | composite `(user_id, created_at DESC)` | sorted leaves → ORDER BY без sort step | да |
-| UC3 like by `post_id` | burst writes | B-Tree | single `(post_id)` | point lookup по FK | да |
-| UC1 login по email | rare lookup | B-Tree | UNIQUE `(email)` | equality на unique key | да |
-| keyword по caption | out of scope MVP | GIN | tsvector | posting list по токенам | нет |
-| semantic «похожие посты» | deferred UC | Vector | HNSW | ANN по embedding, не keyword | нет |
-
-→ цепочка: [indexing](../trade-offs/data/indexing-strategy.md)
-
-### Trade-offs → выбор (data layer)
-
-| Тема | A / B | ✅ Выбор | Почему |
-|------|-------|----------|--------|
-| Топология ([master-slave](../trade-offs/data/master-slave-multi-master.md)) | master-slave / multi-master | **master-slave** | один writer, 115 w/s — conflict resolution не нужен |
-| Репликация ([replication](../trade-offs/data/replication-sync-async.md)) | sync / async | **async** | RPO секунды OK · p99 write ≤ 2s · лента eventual |
-| Шардирование ([sharding](../trade-offs/data/sharding-partitioning.md)) | range / hash / geo | **hash(`user_id`) mod 8** | равномерно · нет geo · range даст hotspot на новых user |
-| Кэш ленты ([cache](../trade-offs/architecture/caching-patterns.md)) | aside / through / back | **cache-aside** | hot 20% users = 80% reads · miss → PG+fan-out |
-| Кэш лайков | aside / through / back | **write-behind** | burst лайков · eventual OK · batch flush в PG |
-
----
-
-## 5. Architectural characteristics
-
-| Категория | Характеристика | ✅ Выбор | Trade-off | Почему (FR) |
-|-----------|----------------|----------|-----------|-------------|
-| **Operational** | Availability | async repl + failover | [replication](../trade-offs/data/replication-sync-async.md) | HA, **не read scale** |
-| | Continuity | rolling deploy | [deployment](../trade-offs/architecture/deployment-release-strategies.md) | SLA 99.9% |
-| | DR | RPO секунды, RTO 15 min | [DR](../trade-offs/architecture/disaster-recovery-pattern.md) | §2.3 |
-| **Structural** | Scalability (read) | CDN + cache-aside | [CDN](../trade-offs/architecture/cdn-object-storage-pattern.md) · [cache](../trade-offs/architecture/caching-patterns.md) | FR-9 20 GB/s |
-| | Scalability (write) | 8 shards hash user_id | [sharding](../trade-offs/data/sharding-partitioning.md) | когда single master не хватит |
-| | Consistency | eventual feed / strong follow | [CAP](../trade-offs/architecture/cap-pacelc-distributed.md) | FR-4, FR-6 |
-| **Cross-cutting** | Caching | cache-aside feed + write-behind likes | [caching-patterns](../trade-offs/architecture/caching-patterns.md) | FR-3, FR-9 |
-| | Messaging | fan-out pub/sub | [messaging](../trade-offs/architecture/messaging-patterns.md) | FR-5 |
-
-### Failure modes
-
-| Сбой | Поведение | FR |
-|------|-----------|-----|
-| Feed cache down | Fallback PG replica; circuit breaker | FR-9 |
-| Replica lag | Stale feed OK | FR-6 |
-| Fan-out queue lag | Delayed feed update | FR-5 |
-| CDN miss storm | Origin spike; rate limit | FR-9 |
-| Duplicate like retry | Idempotent — no double count | FR-3 |
-
-### Traceability (FR → §5 → §7)
-
-| FR | Arch choice §5 | Tech §7 |
-|----|----------------|---------|
-| FR-5 celebrity | async fan-out | Kafka + feed workers |
-| FR-6 stale OK | async repl (HA) + replica read offload | PG replicas |
-| FR-9 read >> write | CDN + cache-aside | CloudFront + Redis |
-| FR-3 like burst | write-behind | Redis buffer |
-
----
-
-## 6. HLD
-
-**4 сервиса** ([monolith-micro](../trade-offs/architecture/monolith-microservices.md)) · stateless API ([stateless](../trade-offs/architecture/stateless-stateful.md))
-
-### Общая схема
+### 3.3 HLD — схема системы
 
 ```mermaid
 flowchart TB
@@ -335,150 +124,64 @@ flowchart TB
     FeedWorkers --> Redis["Redis cluster"]
 
     Media --> S3
-    Meta --> ShardRouter["Shard Router"]
+    Post --> ShardRouter["Shard Router"]
     ShardRouter --> PGShards["PG 8 shards"]
     Social --> ShardRouter
-    Post --> ShardRouter
-
-    Cron --> Cleanup[cleanup]
+    Feed --> Redis
+    Feed --> PGShards
 ```
 
-### Репликация — HA + optional read offload
-
-```mermaid
-flowchart LR
-    subgraph writers [Writers]
-        PostW[Post]
-        SocialW[Social]
-    end
-
-    Master[("Master PG<br/>Source of Truth")]
-
-    subgraph replicas [Read Replicas]
-        R1[("Replica 1")]
-        R2[("Replica 2")]
-        RM[("Replica M")]
-    end
-
-    subgraph readers [Reader Processes]
-        F1[Feed Pod 1]
-        F2[Feed Pod 2]
-        FN[Feed Pod N]
-    end
-
-    PostW -->|write| Master
-    SocialW -->|write| Master
-    Master -->|async replicate| R1
-    Master -->|async replicate| R2
-    Master -->|async replicate| RM
-    R1 -->|query| F1
-    R2 -->|query| F2
-    RM -->|query| FN
-```
-
-follows / profile → **primary** · feed timeline → **replica** (stale ≤ replication lag)
-
-### Шардирование — hash by user_id
-
-```mermaid
-flowchart TB
-    Meta[Meta Service] --> Router["Shard Router<br/>hash user_id mod 8"]
-    PostSvc[Post Service] --> Router
-    SocialSvc[Social Service] --> Router
-
-    Router --> S1[("Shard 1")]
-    Router --> S2[("Shard 2")]
-    Router --> S8[("Shard 8")]
-```
-
-posts / follows / likes — shard key = `user_id` · cross-shard JOIN нет · celebrity fan-out через Kafka, не scatter-gather
-
-### Кэширование — cache-aside лента + write-behind лайки
-
-```mermaid
-flowchart LR
-    subgraph feedPath [Feed cache-aside]
-        FeedSvc[Feed] --> RedisF[("Redis<br/>feed:user_id")]
-        RedisF -->|hit| FeedSvc
-        RedisF -->|miss| Replica[("PG Replica")]
-        Replica --> FeedSvc
-        FeedSvc -->|populate TTL 1h| RedisF
-    end
-
-    subgraph likePath [Like write-behind]
-        SocialSvc[Social] --> RedisL[("Redis<br/>like:post_id")]
-        RedisL -->|async batch| Master[("PG Master")]
-    end
-```
-
-### UC2 лента
+**UC2 лента (data flow):**
 
 ```mermaid
 flowchart LR
     Client --> Feed
     Feed -->|"hit ~80%"| Redis
-    Feed -->|"miss ~20%"| Replica["PG Replica + fan-out"]
+    Feed -->|"miss ~20%"| Replica["PG Replica"]
     Client -.->|"фото"| CDN
 ```
 
-фото с CDN, не origin.
+### 3.4 TOP-3 pillars · agenda §4
 
-**Сбой:** broker lag → лента stale; CDN down → fallback signed origin (медленнее); replica lag → read-after-write miss на своём посте → fallback primary.
+| # | Pillar (ID) | ✅ Направление | §4 (блок) | Почему |
+|---|-------------|----------------|-----------|--------|
+| 1 | **X1** Caching | CDN + cache-aside | §4.2 | §2.2 bandwidth |
+| 2 | **S1** Scalability | read path 20 GB/s | §4.2 | bottleneck |
+| 3 | **X2** Processing | async fan-out | §4.3 | FR-5 |
+
+Implementation: push async, hash shard when needed — §4, не в TOP-3.
 
 ---
 
-## 7. Technology choices
+## 4. Deep Dive (15–18 min)
 
-### Broker (post → fan-out)
+**START §4.2** (read bottleneck) → затем **§4.3** (X2 из agenda) · §4.4 — если осталось время
 
-| Вопрос | Если да | Если нет |
-|--------|---------|----------|
-| N consumers на одно событие? | log / pub-sub | point-to-point queue |
-| Replay / retention нужен? | Kafka | Redis queue / BullMQ |
-| **✅ Выбор** | **Kafka** | 115 w/s fan-out, replay при lag |
+### §4.2 DB + Cache (primary — START)
 
-→ [messaging](../trade-offs/architecture/messaging-patterns.md) · [brokers](../trade-offs/technologies/message-brokers.md)
+| Вопрос | ✅ |
+|--------|-----|
+| SQL vs NoSQL | PostgreSQL — graph + transactions |
+| Read hot path | Redis cache-aside feed lists |
+| Media bandwidth | CloudFront + S3 |
+| HA | async repl — **HA**, stale feed OK |
 
-### Cache (feed)
+### §4.3 Broker (agenda: X2)
 
-| Вопрос | Если да | Если нет |
-|--------|---------|----------|
-| Read >> write? | cache-aside | без cache |
-| Stale ленты OK? | in-memory list | read PG каждый раз |
-| **✅ Выбор** | **Redis cache-aside** | hot ~20% users = ~80% reads |
+Kafka pub/sub — celebrity fan-out, replay при lag.
 
-→ [cache](../trade-offs/architecture/caching-patterns.md)
+### §4.4 Failures (если осталось время)
 
-### Media + CDN
+Cache down → PG replica · CDN miss storm → rate limit · Fan-out lag → stale OK.
 
-| Вопрос | Выбор |
-|--------|-------|
-| Read media ~20 GB/s из §2.2 | CDN + object storage origin |
-
-→ [CDN](../trade-offs/architecture/cdn-object-storage-pattern.md)
-
-### DB
-
-| Вопрос | Выбор |
-|--------|-------|
-| OLTP + joins + graph follows | PostgreSQL |
-| Scale metadata writes | 8 shards `hash(user_id)` |
-| HA + read offload feed | 3 async replicas (failover; stale reads OK) |
-
-→ [sharding](../trade-offs/data/sharding-partitioning.md) · [replication](../trade-offs/data/replication-sync-async.md)
-
-### Infra
+### Infra sizing
 
 | Компонент | Тех | Размер | Откуда |
 |-----------|-----|--------|--------|
-| CDN | Cloudflare | ~20 GB/s peak | §2.2 read media |
-| Object storage | S3 | ~2.5 TB/год | §2.2 storage |
-| Broker | Kafka, 3 brokers | fan-out | §2.2 write RPS |
-| Cache | Redis cluster | feed + likes | §2.5 read-heavy |
-| DB | PG, 8 shards + 3 replica | metadata | §2.2 |
-| API | K8s | ~3K r/s | §2.5 |
-| Gateway | ALB L7 | — | [gateway](../trade-offs/technologies/api-gateways.md) |
-
----
+| CDN | Cloudflare | ~20 GB/s peak | §2.2 bandwidth |
+| Cache | Redis cluster | feed + likes | read-heavy |
+| DB | PG 8 shards + 3 repl | metadata | §2.2 storage |
+| API | K8s | ~3K r/s | §2.2 read QPS × headroom |
+| Broker | Kafka ×3 | fan-out | §2.2 write QPS |
 
 ← [FRAMEWORK.md](../FRAMEWORK.md)

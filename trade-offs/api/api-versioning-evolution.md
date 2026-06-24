@@ -16,7 +16,7 @@ steps: [3]
 
 ## Цепочка решений
 
-Шаг 2 NFR + FR → шаг 3 API design → шаг 5 pattern → шаг 2 Infra tooling
+шаг 2 NFR + FR → HLD §3.1 API → Deep Dive §4.x → Deep Dive §4.x (tech)
 
 ## Backward-compatible evolution vs Breaking changes
 

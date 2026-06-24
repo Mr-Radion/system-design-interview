@@ -19,7 +19,7 @@ related:
 
 ## Цепочка решений
 
-Шаг 2 NFR → шаг 5 infra pattern → шаг 2 Infra tech
+шаг 2 NFR → Deep Dive §4.1 → Deep Dive §4.x (tech)
 
 ## L4 (Transport: TCP (Transmission Control Protocol)/UDP (User Datagram Protocol)
 
@@ -67,7 +67,7 @@ DNS возвращает IP ближайшего региона (latency routing
 - Sticky: needed for stateful WebSocket/state in memory.
 - Stateless: preferred; externalize session to Redis.
 
-см. [Infra-таблицу шага 2](../../workflow/02-non-functional-requirements.md).
+см. [Infra-таблицу шаг 2 NFR](../../workflow/02-non-functional-requirements.md).
 
 ---
 

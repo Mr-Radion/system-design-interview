@@ -20,7 +20,7 @@ related:
 
 ## Цепочка решений
 
-Шаг 2 RPS growth → performance tweaks → horizontal + LB → шаг 2 Infra
+шаг 2 NFR RPS growth → performance tweaks → horizontal + LB → Deep Dive §4.x
 
 ## Scalability (масштабируемость) vs Performance (производительность)
 

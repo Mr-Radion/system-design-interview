@@ -8,7 +8,7 @@ related:
 
 # Latency vs Throughput (Задержка vs Пропускная способность)
 
-> **Главное:** Latency/Throughput — **не технология**, а **цифры NFR шага 2**. Вход — тип UX и объём. Выход — приоритет для паттернов шага 5.
+> **Главное:** Latency/Throughput — **не технология**, а **цифры шаг 2 NFR**. Вход — тип UX и объём. Выход — приоритет для паттернов Deep Dive §4.x.
 
 ## Что определяет выбор
 
@@ -20,7 +20,7 @@ related:
 
 ## Цепочка решений
 
-Шаг 2 NFR → шаг 5: cache/CDN (latency) или batch/queue (throughput) → шаг 2 Infra: Redis vs Spark
+шаг 2 NFR → Deep Dive §4.x: cache/CDN (latency) или batch/queue (throughput) → Deep Dive §4.x: Redis vs Spark
 
 ## Latency (задержка) vs Throughput (пропускная способность)
 

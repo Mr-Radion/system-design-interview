@@ -19,7 +19,7 @@ related:
 
 ## Цепочка решений
 
-Шаг 2 NFR → шаг 5 messaging pattern → шаг 2 Infra tech
+шаг 2 NFR → Deep Dive §4.3 messaging → Deep Dive §4.x (tech)
 
 ## Queue (Point-to-Point)
 
@@ -89,7 +89,7 @@ related:
 
 **Проблема двух queues:** producer crash между queue-1 и queue-2 → inconsistency. **Stream** решает: оба consumer groups читают один log.
 
-**Шаг 5:** pattern. см. [Infra-таблицу шага 2](../../workflow/02-non-functional-requirements.md).
+**Deep Dive §4.x:** pattern. см. [Infra-таблицу шаг 2 NFR](../../workflow/02-non-functional-requirements.md).
 
 ---
 

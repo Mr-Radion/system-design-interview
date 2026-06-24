@@ -20,7 +20,7 @@ related:
 
 ## Цепочка решений
 
-Шаг 2 NFR → шаг 5 Scalability (cache) → шаг 7 Infra tech (Redis)
+шаг 2 NFR → Deep Dive §4.2 cache → Deep Dive §4.2 (Redis)
 
 ## Cache-Aside (Lazy Loading)
 
@@ -63,7 +63,7 @@ related:
 
 **HTTP / CDN:** кэшировать только **idempotent GET/HEAD**; invalidation — ETag, Cache-Control, versioned keys.
 
-**Шаг 5:** pattern · eviction policy → [cache-eviction-policies](cache-eviction-policies.md) · §7 infra в example.
+**Deep Dive §4.x:** pattern · eviction policy → [cache-eviction-policies](cache-eviction-policies.md) · Deep Dive §4.x в example.
 
 ## Резюме
 

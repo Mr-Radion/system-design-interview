@@ -28,7 +28,7 @@ related:
 
 ## Цепочка решений
 
-Шаг 1 FR (analytics UC) → шаг 2 NFR (delay, duplicates) → **этот паттерн** → шаг 2 Infra Airflow / Kafka Connect
+Шаг 1 FR (analytics UC) → шаг 2 NFR → **этот паттерн** → Deep Dive §4.x Airflow / Kafka Connect
 
 Подробно с примерами PostgreSQL → Elasticsearch: [references/etl-for-postgresql-se.md](../../references/etl-for-postgresql-se.md).
 

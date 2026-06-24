@@ -19,7 +19,7 @@ related:
 
 ## Цепочка решений
 
-Шаг 2 NFR → шаг 5 observability pattern → шаг 2 Infra tools
+шаг 2 NFR → Deep Dive §4.4 observability pattern → Deep Dive §4.x (tech)
 
 ## Three Pillars
 
@@ -60,7 +60,7 @@ related:
 | Method | Synthetic probes | Internal metrics |
 | Catches | User-visible outage | Degradation before outage |
 
-см. [Infra-таблицу шага 2](../../workflow/02-non-functional-requirements.md).
+см. [Infra-таблицу шаг 2 NFR](../../workflow/02-non-functional-requirements.md).
 
 
 ---

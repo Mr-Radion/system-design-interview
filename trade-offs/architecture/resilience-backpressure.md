@@ -19,7 +19,7 @@ related:
 
 ## Цепочка решений
 
-Шаг 2 NFR → шаг 5 resilience pattern → шаг 2 Infra tech
+шаг 2 NFR → Deep Dive §4.1 resilience → Deep Dive §4.x (tech)
 
 ## Rate Limiting (ограничение частоты запросов)
 

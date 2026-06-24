@@ -19,7 +19,7 @@ related:
 
 ## Цепочка решений
 
-Шаг 2 scale → шаг 4 partition plan → шаг 5 pattern → шаг 2 Infra tech
+шаг 2 NFR scale → HLD §3.2 + Deep Dive §4.2 sharding → Deep Dive §4.x → Deep Dive §4.x (tech)
 
 ## Partitioning (в одной БД/ноде)
 

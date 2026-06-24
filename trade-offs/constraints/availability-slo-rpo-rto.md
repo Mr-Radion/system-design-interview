@@ -8,7 +8,7 @@ related:
 
 # Availability, SLO, RPO/RTO (доступность, цели сервиса и восстановления)
 
-> **Главное:** Availability/RPO/RTO — **цифры шага 2**. Вход — downtime cost. Выход — DR-паттерн и replication.
+> **Главное:** Availability/RPO/RTO — **цифры шаг 2 NFR**. Вход — downtime cost. Выход — DR-паттерн и replication.
 
 ## Что определяет выбор
 
@@ -20,7 +20,7 @@ related:
 
 ## Цепочка решений
 
-Шаг 2 SLA → multi-AZ / DR pattern → sync vs async repl → шаг 2 Infra
+шаг 2 NFR SLA → multi-AZ / DR pattern → sync vs async repl → Deep Dive §4.x
 
 ## Availability (доступность)
 
@@ -52,7 +52,7 @@ related:
 - **RPO (Recovery Point Objective, допустимая потеря данных)**: сколько **данных** можно потерять (1 min / 1 hour / 1 day).
 - **RTO (Recovery Time Objective, допустимое время восстановления)**: сколько **времени** на восстановление (5 min / 4 hours).
 
-| Tier | RPO (Recovery Point Objective, допустимая потеря данных) | RTO (Recovery Time Objective, допустимое время восстановления) | Pattern (шаг 5) |
+| Tier | RPO (Recovery Point Objective, допустимая потеря данных) | RTO (Recovery Time Objective, допустимое время восстановления) | Pattern (Deep Dive §4.x) |
 |------|-----|-----|-----------------|
 | Critical | 0 | < 5 min | Sync replication, hot standby |
 | Standard | 1 h | 4 h | Async replication, warm standby |
