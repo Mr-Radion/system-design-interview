@@ -2,27 +2,28 @@
 
 ← [FRAMEWORK](../FRAMEWORK.md)
 
-**Фокус шага:** интервьюер **сам выбирает**, куда копать. Обычно **1 блок по bottleneck (START)** + **ещё 0–1 из AGENDA** — не все §4.1–4.4 подряд.
+**Фокус шага:** интервьюер **сам выбирает**, куда копать. Обычно **1 блок по bottleneck (§2.8)** + **ещё 0–1 из TOP-3 (§2.6)** — не все §4.1–4.4 подряд.
 
 | Сколько | Что | Кто решает |
 |---------|-----|------------|
-| **1 блок** | START из §2.8 | ты предлагаешь по bottleneck |
-| **+0–1 блок** | второй pillar из §3.4 AGENDA | интервьюер ведёт вопросами |
+| **1 блок** | §4.x из §2.8 | ты предлагаешь по bottleneck |
+| **+0–1 блок** | второй pillar из TOP-3 §2.6 | интервьюер ведёт вопросами |
 | **остальное** | строки из меню ниже | только если спросил / 2–3 min в конце |
 
 > **Правило шага 4:**
-> 1. Предложи **START** — §4.x из §2.8 («bottleneck → начну отсюда»)
+> 1. Предложи блок из §2.8 («bottleneck → начну отсюда»)
 > 2. Если интервьюер согласен — **углубись в 1 блок** (2–4 trade-off вопроса, не все строки таблицы)
-> 3. **AGENDA (§3.4)** — второй блок только если он повёл туда или осталось ~5 min
+> 3. **Второй блок** — только если повёл туда или осталось ~5 min (из TOP-3 §2.6)
 > 4. §4.1–4.4 ниже — **меню pull**, не обязательный маршрут
 
 **Мини-примеры прохода** (в [examples/](../examples/) §4) — образец *как* раскрыть 1–2 блока, не план «пройти всё».
 
 | Пример | Обычно на собесе | Второй блок (если успеют) |
 |--------|------------------|---------------------------|
-| Instagram | §4.2 START | §4.3 по вопросу про fan-out |
-| PayPal | §4.4 → §4.2 START | §4.3 saga — если спросят |
-| VK | §4.2 START | §4.3 или §4.4 — по вопросу |
+| Instagram | §4.2 | §4.3 по вопросу про fan-out |
+| PayPal | §4.4 → §4.2 | §4.3 saga — если спросят |
+| VK | §4.2 | §4.3 или §4.4 — по вопросу |
+| Nutrition | §4.3 | §4.2 — если спросят latency |
 
 4 блока — **меню** по pillar IDs:
 
@@ -35,16 +36,15 @@
 
 ## Routing table
 
-| Bottleneck §2.8 (START) | Start here | Пример |
-|-------------------------|------------|--------|
-| Read >> write, bandwidth | **§4.2** | Instagram |
-| Write fan-out / async | **§4.3** | Instagram celebrity |
-| Storage TB, retention | **§4.2** | VK messages |
-| CP / RPO ≈ 0 | **§4.4** → **§4.2** | PayPal |
-| analytics / ETL FR | **§4.3** batch | reports |
-| security / routing | **§4.1** | по запросу |
+Единая таблица bottleneck → §4: [workflow/02 §2.8](02-non-functional-requirements.md#28-bottleneck--куда-копать-в-4).
 
-**Имя продукта (Kafka, Redis) — только после trade-off gate**, с привязкой к §2.2.
+| Пример | Начать с |
+|--------|-------|
+| Instagram | §4.2 |
+| PayPal | §4.4 → §4.2 |
+| VK | §4.2 |
+
+**Имя продукта (Kafka, Redis) — только после trade-off gate в §4**, с привязкой к §2.2.
 
 ---
 
@@ -60,7 +60,7 @@
 
 ---
 
-## 4.2 Data: DB + Cache (S1, X1, O1) · частый START
+## 4.2 Data: DB + Cache (S1, X1, O1) · частый первый блок
 
 *Типичный первый блок: read/storage bottleneck. 2–3 строки таблицы, не всю.*
 
@@ -78,7 +78,7 @@
 
 ## 4.3 Async, Messaging & Batch (X2, X5) · второй блок или pull
 
-*Если не START — обычно по вопросу про fan-out, billing async, ETL.*
+*Если не первый блок — обычно по вопросу про fan-out, billing async, ETL.*
 
 | Вопрос | Trade-off | Tech |
 |--------|-----------|------|
@@ -91,7 +91,7 @@
 
 ---
 
-## 4.4 DR, CAP & Failures (O3, S2) · START для CP/money
+## 4.4 DR, CAP & Failures (O3, S2) · частый первый блок для CP/money
 
 *PayPal-стиль: часто открывают здесь. Failure modes — 2–3 строки, не лекция.*
 
@@ -127,4 +127,4 @@ Failure modes — 2–3 строки на доске.
 
 ← [03 — HLD](03-high-level-design.md) · [FRAMEWORK](../FRAMEWORK.md)
 
-Примеры: [instagram §4](../examples/instagram-feed.md#4-deep-dive) · [paypal §4](../examples/paypal-payments.md#4-deep-dive) · [vk §4](../examples/vk-social.md#4-deep-dive) · [open-world §4](../examples/open-world-mobile-game.md#4-deep-dive)
+Примеры: [instagram §4](../examples/instagram-feed.md#4-deep-dive) · [paypal §4](../examples/paypal-payments.md#4-deep-dive) · [vk §4](../examples/vk-social.md#4-deep-dive) · [open-world §4](../examples/open-world-mobile-game.md#4-deep-dive) · [nutrition §4](../examples/nutrition-mobile-app.md#4-deep-dive)

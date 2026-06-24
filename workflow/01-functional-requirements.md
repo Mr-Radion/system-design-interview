@@ -5,7 +5,7 @@
 **Фокус шага:** *что* делает система — без цифр, SLA и trade-offs (→ шаг 2 NFR).
 
 **На доске:** Overview + **4–6 core FR** + Out of scope.  
-**Не на доске:** RPS, SLA (→ шаг 2), Kafka/Redis (→ шаг 4).
+**Не на доске:** RPS, SLA (→ шаг 2) · trade-off решения и вендоры (→ шаг 4). На HLD (шаг 3) — роли компонентов OK, см. [03 §3](03-high-level-design.md).
 
 ---
 
@@ -103,4 +103,4 @@
 
 ← [FRAMEWORK](../FRAMEWORK.md) · [02 — NFR](02-non-functional-requirements.md) →
 
-Примеры: [instagram](../examples/instagram-feed.md) · [paypal](../examples/paypal-payments.md) · [vk](../examples/vk-social.md) · [open-world](../examples/open-world-mobile-game.md)
+Примеры: [instagram](../examples/instagram-feed.md) · [paypal](../examples/paypal-payments.md) · [vk](../examples/vk-social.md) · [open-world](../examples/open-world-mobile-game.md) · [nutrition](../examples/nutrition-mobile-app.md)

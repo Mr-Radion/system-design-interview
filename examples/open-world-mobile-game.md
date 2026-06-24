@@ -85,7 +85,7 @@ Peak CCU **20K** · login burst ×10 (релиз патча) · telemetry burst 
 | O3 | DR | ✅ | warm tier | RPO progress ≈ 0 | — |
 | S1 | Scalability | ✅ | shard player_id, 20K CCU | §2.2 | **да** |
 | S2 | Consistency | ✅ | strong progress/quest | FR-2, FR-3 | **да** |
-| X1 | Caching | ✅ | Redis hot profile | login, friend list | — |
+| X1 | Caching | ✅ | hot profile cache | login, friend list | — |
 | X2 | Processing | ✅ | sync save + async telemetry | FR-6, billing | **да** |
 | X3 | Observability | ✅ | §2.5 + load tests | нагрузочные тесты | — |
 | X4 | Security | ✅ | OAuth, billing signature | FR-1, FR-5 | — |
@@ -95,15 +95,15 @@ Peak CCU **20K** · login burst ×10 (релиз патча) · telemetry burst 
 
 | Path | Core UC | Когда | Механизм |
 |------|---------|-------|----------|
-| **Sync** | progress save, quest complete, login | user ждёт ACK | API → PG shard |
-| **Async** | telemetry, billing webhook, clan notify | FR-5, FR-6 | Kafka → workers |
-| **Batch** | analytics aggregates, retention | daily reports | ClickHouse ETL |
+| **Sync** | progress save, quest complete, login | user ждёт ACK | API → SQL DB shard |
+| **Async** | telemetry, billing webhook, clan notify | FR-5, FR-6 | message bus → workers |
+| **Batch** | analytics aggregates, retention | daily reports | analytics warehouse ETL |
 
 **DR tier (O3):** Warm — RPO ≈ 0 на progress (semi-sync/WAL), RTO 15 min.
 
-### 2.8 Bottleneck → START §4
+### 2.8 Bottleneck → куда копать в §4
 
-**START:** 20K CCU → progress writes + telemetry **~1.7K events/s** → **§4.2** (S1 player shard) · **AGENDA:** S2 (§4.4), X2 (§4.3)
+**Куда копать:** 20K CCU → progress writes + telemetry ~1.7K events/s → Deep Dive **§4.2** (TOP-3: S1, S2, X2 — см. §2.6)
 
 **На собесе акцент (помимо bottleneck):**
 - потеря progress при crash — **S2, RPO ≈ 0**
@@ -129,8 +129,8 @@ Peak CCU **20K** · login burst ×10 (релиз патча) · telemetry burst 
 ### 3.2 Data
 
 ```
-Player 1──M QuestProgress · Player M──N Player (friends) · Clan 1──M Player
-Store: PostgreSQL (progress, social, quests) + Redis (session, hot profile) + Kafka (events) + ClickHouse (analytics)
+Player 1──M QuestProgress · Player M──N Player · Clan 1──M Player  *(ER — §1)*
+Store roles: SQL DB (progress, social, quests) · Cache (session, profile) · Message queue (events) · Analytics store
 ```
 
 ### 3.3 HLD — схема системы
@@ -154,14 +154,13 @@ flowchart TB
     Social --> PG_Social[("PostgreSQL")]
     Billing --> PG_Bill[("PostgreSQL")]
 
-    Progress --> Kafka[("Kafka")]
-    Quest --> Kafka
-    Billing --> Kafka
-  Mobile --> Kafka
+    Progress --> MQ[("Message Queue")]
+    Quest --> MQ
+    Billing --> MQ
 
-    Kafka --> TelemetryWorker[Telemetry Worker]
-    Kafka --> BillingWorker[Billing Worker]
-    TelemetryWorker --> CH[("ClickHouse")]
+    MQ --> TelemetryWorker[Telemetry Worker]
+    MQ --> BillingWorker[Billing Worker]
+    TelemetryWorker --> Analytics[("Analytics Store")]
     BillingWorker --> ShardRouter
 
     GameServer["Game Server Fleet"] -.->|"periodic save"| Progress
@@ -181,18 +180,8 @@ sequenceDiagram
     P->>DB: UPSERT player_state
     DB-->>P: OK
     P-->>GS: 200 ACK
-    P->>Kafka: PlayerSaved event async
+    P->>MQ: PlayerSaved event async
 ```
-
-### 3.4 TOP-3 pillars · agenda §4
-
-| # | Pillar (ID) | ✅ Направление | §4 (блок) | Почему |
-|---|-------------|----------------|-----------|--------|
-| 1 | **S1** Scalability | hash(player_id) shards, 20K CCU | §4.2 | bottleneck |
-| 2 | **S2** Consistency | strong progress/quest | §4.4 | RPO ≈ 0 |
-| 3 | **X2** Processing | sync save + async telemetry | §4.3 | FR-6 ~1.7K/s |
-
-Implementation: PostgreSQL shard, Kafka, ClickHouse, billing idempotency — §4, не в TOP-3.
 
 ---
 
@@ -200,9 +189,9 @@ Implementation: PostgreSQL shard, Kafka, ClickHouse, billing idempotency — §4
 
 *Интервьюер выберет **1–2 темы** из 20K CCU / progress / billing. Не проходить все §4 подряд.*
 
-**Типичный сценарий:** START §4.2 · §4.4 или §4.3 — **по вопросу интервьюера**
+**Типичный сценарий:** §4.2 · §4.4 или §4.3 — **по вопросу интервьюера**
 
-### §4.2 DB + player state *(образец — блок START)*
+### §4.2 DB + player state *(образец — единственный блок на доске)*
 
 | Вопрос | ✅ |
 |--------|-----|
@@ -212,32 +201,9 @@ Implementation: PostgreSQL shard, Kafka, ClickHouse, billing idempotency — §4
 | Hot zone spike | rate limit saves/player; queue overflow → client retry |
 | HA | async repl per shard — **HA**; progress read primary on save path |
 
-### §4.4 CAP + progress *(pull — если спросят про S2 / RPO)*
+**Pull (если спросят):** S2/RPO progress consistency · X2 telemetry/billing async · edge security/rate limit · infra sizing — таблица ниже
 
-Strong consistency на progress/quest в одном shard · cross-shard clan — eventual OK · RPO ≈ 0: WAL + semi-sync на primary shard · crash mid-save → client resend with version.
-
-| Сбой | Поведение |
-|------|-----------|
-| Shard primary down | failover replica · in-flight save retry |
-| Duplicate save | `version` optimistic lock — 409 → client merge |
-| Billing webhook ×2 | idempotency key `store_tx_id` |
-
-### §4.3 Async + integrations *(pull — telemetry / billing)*
-
-| Path | ✅ |
-|------|-----|
-| Telemetry ~1.7K/s | Kafka buffer → ClickHouse batch insert |
-| Billing webhook | sync signature verify → async grant currency via outbox |
-| Social OAuth | Auth service; link table provider↔player |
-| Load tests | k6/Gatling на login + save @ 20K CCU scenario |
-
-Kafka partition by `player_id` — ordering events per player.
-
-### §4.1 Edge *(pull — security / rate limit)*
-
-Rate limit per player/IP · JWT session · billing webhook IP allowlist.
-
-### Infra sizing
+### Infra sizing *(pull, ~2 min)*
 
 | Компонент | Тех | Размер | Откуда |
 |-----------|-----|--------|--------|

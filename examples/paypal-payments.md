@@ -80,7 +80,7 @@ Peak ~1_000 TPS · ledger ~2K row writes/s · burst ×3 payday · headroom ×2.
 | O3 | DR | ✅ | **hot** tier | RPO ≈ 0, RTO < 1 min | **да** |
 | S1 | Scalability | ✅ | 4 shards hash account_id | ~1K TPS | — |
 | S2 | Consistency | ✅ | CP ledger | FR-6, RPO ≈ 0 | **да** |
-| X1 | Caching | ✅ | Redis idempotency | sync path dedup | — |
+| X1 | Caching | ✅ | key-value dedup | sync path | — |
 | X2 | Processing | ✅ | sync initiate, async settle | FR-2 merchant | — |
 | X3 | Observability | ✅ | §2.5 metrics | saga/outbox SLO | — |
 | X4 | Security | ✅ | JWT, rate limit, PCI scope | FR-4 idempotency | — |
@@ -91,14 +91,14 @@ Peak ~1_000 TPS · ledger ~2K row writes/s · burst ×3 payday · headroom ×2.
 | Path | Core UC | Когда | Механизм |
 |------|---------|-------|----------|
 | **Sync** | POST /transfers, balance read | user ждёт ACK | API → ledger primary |
-| **Async** | merchant settle, saga steps | PSP timeout, cross-shard | Kafka + orchestrator |
+| **Async** | merchant settle, saga steps | PSP timeout, cross-shard | message bus + orchestrator |
 | **Batch** | — | — | N/A |
 
 **DR tier (O3):** Hot — RPO ≈ 0, RTO < 1 min · semi-sync repl, auto failover.
 
-### 2.8 Bottleneck → START §4
+### 2.8 Bottleneck → куда копать в §4
 
-**START:** CP ledger + RPO ≈ 0 → **§4.4 → §4.2** (pillars O3, S2) · **AGENDA:** также X5 → §4.3
+**Куда копать:** CP ledger + RPO ≈ 0 → Deep Dive **§4.4 → §4.2** (TOP-3: O3, S2, X5 — см. §2.6)
 
 ---
 
@@ -115,8 +115,8 @@ Peak ~1_000 TPS · ledger ~2K row writes/s · burst ×3 payday · headroom ×2.
 ### 3.2 Data
 
 ```
-Account 1──M LedgerEntry · Payment 1──M LedgerEntry · Merchant 1──M Payment
-Store: PostgreSQL ledger (sharded) + Redis (idempotency) + outbox table
+Account 1──M LedgerEntry · Payment 1──M LedgerEntry · Merchant 1──M Payment  *(ER — §1)*
+Store roles: SQL DB ledger (sharded) · Cache (idempotency) · outbox table
 ```
 
 ### 3.3 HLD — схема системы
@@ -134,19 +134,9 @@ flowchart TB
     LedgerRouter --> L4[("Ledger Shard 4")]
     PaymentAPI --> OutboxRelay[Outbox Relay]
     WalletAPI --> OutboxRelay
-    OutboxRelay --> Kafka
-    Kafka --> Orchestrator
+    OutboxRelay --> MQ[("Message Queue")]
+    MQ --> Orchestrator
 ```
-
-### 3.4 TOP-3 pillars · agenda §4
-
-| # | Pillar (ID) | ✅ Направление | §4 (блок) | Почему |
-|---|-------------|----------------|-----------|--------|
-| 1 | **O3** DR | hot tier, RPO ≈ 0 | §4.4 | §2.3 RPO/RTO |
-| 2 | **S2** Consistency | CP ledger | §4.4 | FR-6 |
-| 3 | **X5** Distributed TX | saga + outbox | §4.3 | cross-shard P2P |
-
-Implementation: semi-sync repl, orchestration vs 2PC — §4, не в TOP-3.
 
 ---
 
@@ -154,38 +144,33 @@ Implementation: semi-sync repl, orchestration vs 2PC — §4, не в TOP-3.
 
 *Интервьюер выберет **1–2 темы** — обычно CP/ledger, не все блоки. Ниже — как углубиться, если повели туда.*
 
-**Типичный сценарий:** START §4.4 → §4.2 · §4.3 saga — **только если спросят**
+**Типичный сценарий:** §4.4 → §4.2 · §4.3 saga — **только если спросят**
 
-### §4.4 CAP + failures *(образец — блок START для CP/money)*
+### §4.4 + §4.2 *(образец — CP/money, один блок на доске)*
 
-CP ledger · semi-sync repl · saga compensate on PSP timeout.
+CP ledger · semi-sync repl · PostgreSQL double-entry · hash(`account_id`) mod 4 · Redis idempotency TTL 72h.
 
 | Сбой | Поведение |
 |------|-----------|
 | Crash after COMMIT | Outbox poller догоняет |
-| Duplicate Kafka event | Consumer dedup `event_id` |
+| Duplicate event | Consumer dedup `event_id` |
+| PSP timeout | Saga compensate |
 
-### §4.2 DB + ledger *(образец — продолжение START)*
-
-PostgreSQL double-entry · hash(`account_id`) mod 4 · Redis idempotency TTL 72h.
-
-### §4.3 Broker + outbox *(pull — если спросят про X5 / saga)*
-
-Kafka — outbox relay + saga events.
+**Pull (если спросят):** saga + outbox + Kafka (X5) — sequence diagram ниже · infra sizing — таблица
 
 ```mermaid
 sequenceDiagram
     participant API as Wallet API
     participant DB as Ledger PG
     participant Relay as Outbox Poller
-    participant K as Kafka
+    participant Q as Message Queue
 
     API->>DB: BEGIN ledger_entry + outbox
     API->>DB: COMMIT
-    Relay->>K: publish FundsReserved
+    Relay->>Q: publish FundsReserved
 ```
 
-### Infra sizing
+### Infra sizing *(pull, ~2 min)*
 
 | Компонент | Тех | Размер | Откуда |
 |-----------|-----|--------|--------|

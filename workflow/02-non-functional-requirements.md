@@ -1,10 +1,13 @@
-# Шаг 2 — NFR (5–7 min)
+# Шаг 2 — NFR (5–7 min на доске)
 
 ← [FRAMEWORK](../FRAMEWORK.md)
 
-**Фокус шага:** цифры, SLO, pillars — *без* имён продуктов и trade-off решений (→ шаг 4).
+**Фокус шага:** цифры, SLO, pillars — *без* trade-off решений и вендоров (→ шаг 4).
 
-**Три слоя:** A метрики (§2.0–2.5) · **B pillars** (§2.6–2.7 Master Catalog) · C implementation (§3.4 → §4).
+**На доске за 5–7 min:** §2.0 ключевые ответы · §2.2 цифры + допущения · §2.8 куда копать в §4 одной строкой.  
+**В заметках / если успеваешь:** §2.3–2.5 детально · полный pass §2.6–2.7 pillars.
+
+**Три слоя:** A метрики (§2.0–2.5) · **B pillars** (§2.6–2.7) · C implementation (§4).
 
 ## 2.0 Спроси интервьюера (перед цифрами)
 
@@ -14,7 +17,7 @@
 |--------|-------|-----------------|
 | **Scale?** DAU / MAU / CCU / registered? | вход §2.2 | расчёты RPS |
 | **Geo?** single region / multi-region? | CDN, repl, latency | §2.6 O3, X1 |
-| **Read vs write?** ratio, hot path? | bottleneck | §2.8 START |
+| **Read vs write?** ratio, hot path? | bottleneck | §2.8 |
 | **Consistency?** money / social / stale OK? | CAP, RPO | §2.6 S2, §2.3 RPO |
 | **Latency?** p99 target на sync path? | SLO | §2.3 |
 | **Retention?** how long store data? | storage / year | §2.2 |
@@ -31,10 +34,9 @@
 | Секция | Роль | Уровень | Что на доске | Чего не пишем |
 |--------|------|---------|--------------|---------------|
 | §2.0–2.5 | Метрики | цифры | RPS, SLA, RPO | имена продуктов |
-| §2.6–2.7 | **Pillar scoping** | pillar | ✅/—, направление, sync/async, DR tier | cache-aside, Kafka, saga |
-| §2.8 | **START для §4** | entry point | 1 строка bottleneck → §4.x | детали trade-offs |
-| §3.4 (шаг 3) | **AGENDA для §4** | agenda | 3 pillar IDs + блок §4 | push vs pull, hash shard |
-| §4 (шаг 4) | **Implementation** | trade-off | gate → tech name | новые pillars вне §2.6 |
+| §2.6 | **Темы архитектуры** + TOP-3 | pillar | ✅/— + 3 главные темы | trade-off имена |
+| §2.8 | **Куда копать в §4** | entry point | 1 строка bottleneck → §4.x | детали trade-offs |
+| §4 | **Implementation** | trade-off | gate → tech name | новые темы вне §2.6 |
 
 ## 2.1 Ключевые метрики
 
@@ -68,7 +70,7 @@ Write Mbps = write_RPS × size
 Storage/год = write_Mbps × 86_400 × 365
 ```
 
-**Драйвер дизайна:** bottleneck → FR-ID → §2.6 pillars → §3.4 TOP-3 → §4.
+**Драйвер дизайна:** bottleneck → FR-ID → §2.6 pillars (TOP-3) → §4.
 
 ## 2.3 SLA / SLO / Latency
 
@@ -102,7 +104,7 @@ Peak … · burst ×N · headroom (из §2.2).
 
 *Уровень: pillar. Фиксируем что релевантно; детали trade-offs — только в §4.*
 
-**Без имён продуктов.** TOP-3 в §3.4 — **только из строк с TOP-3? = да** (ровно 3).
+**Без имён продуктов.** Отметь **ровно 3** строки `TOP-3? = да` — главные темы для Deep Dive.
 
 | ID | Pillar | ✅ / — | Направление (без имён) | Почему §2.2/FR | TOP-3? |
 |----|--------|--------|------------------------|----------------|--------|
@@ -120,6 +122,15 @@ Peak … · burst ×N · headroom (из §2.2).
 **Pull (не в pass):** Extensibility, Maintainability, Portability → [FRAMEWORK](../FRAMEWORK.md#pull-on-demand).
 
 **Ранжирование TOP-3:** bottleneck §2.8 → SLA/RPO (O3, S2) → FR (X2 fan-out) → impact §2.2.
+
+### Типичные TOP-3 по типу задачи
+
+| Тип | Pillar IDs |
+|-----|------------|
+| Read-heavy | **X1** · **S1** · **X2** |
+| CP / money | **O3** · **S2** · **X5** |
+| Write-heavy | **S1** · **O3** · **X2** |
+| Game backend | **S1** · **S2** · **X2** |
 
 ### Правило репликации
 
@@ -149,29 +160,22 @@ Peak … · burst ×N · headroom (из §2.2).
 
 Failover, chaos, multi-region — §4.4, не на доске в 5 мин.
 
-## 2.8 Bottleneck → START в §4
+## 2.8 Bottleneck → куда копать в §4
 
-> **§2.8 = только точка входа (START).** Полная повестка §4 = **§3.4 TOP-3 (AGENDA)**.  
-> §2.8 и §3.4 **не противоречат**: START может быть §4.2, а в AGENDA есть pillar из §4.3.
+**Bottleneck** = что сломается первым (из §2.2). **Одна строка:** куда начать Deep Dive.
 
-| Роль | Секция | Вопрос |
-|------|--------|--------|
-| **START** | §2.8 | С чего **начать** Deep Dive? |
-| **AGENDA** | §3.4 | Какие pillars **держать в голове** (0–1 блок кроме START, если поведут) |
-| **DETAIL** | §4.x | Как **обосновать** (trade-offs)? |
-
-| Если bottleneck… | START (открыть первым) | Связанный pillar |
-|------------------|------------------------|------------------|
+| Если bottleneck… | Начать с | Связанные pillars (§2.6) |
+|------------------|----------|--------------------------|
 | read bandwidth / latency | **§4.2** | X1, S1 |
 | write fan-out / async | **§4.3** | X2 |
 | storage / retention | **§4.2** | S1 |
 | CP / RPO ≈ 0 | **§4.4** → **§4.2** | O3, S2 |
 | security / routing | **§4.1** | X4 |
-| analytics / ETL FR | **§4.3** batch | X2 batch |
+| analytics / ETL FR | **§4.3** batch | X2 |
 
-**Пример Instagram:** START §4.2 · AGENDA X1+S1 там же, X2 → §4.3 **если интервьюер спросит**
+**Пример Instagram:** read 20 GB/s → начать **§4.2** · TOP-3 из §2.6: X1, S1, X2 · fan-out (X2) — только если спросят.
 
-**Вывод:** `bottleneck = X → START §4.x` · полный список тем = §3.4
+**Вывод:** `bottleneck → §4.x` · **3 главные темы** = строки `TOP-3? = да` в §2.6
 
 ## Latency — порядок величин (cheat sheet)
 
@@ -187,4 +191,4 @@ Failover, chaos, multi-region — §4.4, не на доске в 5 мин.
 
 ← [01 — FR](01-functional-requirements.md) · [FRAMEWORK](../FRAMEWORK.md) · [03 — HLD](03-high-level-design.md) →
 
-Примеры: [instagram §2](../examples/instagram-feed.md#2-nfr) · [paypal §2](../examples/paypal-payments.md#2-nfr) · [vk §2](../examples/vk-social.md#2-nfr) · [open-world §2](../examples/open-world-mobile-game.md#2-nfr)
+Примеры: [instagram §2](../examples/instagram-feed.md#2-nfr) · [paypal §2](../examples/paypal-payments.md#2-nfr) · [vk §2](../examples/vk-social.md#2-nfr) · [open-world §2](../examples/open-world-mobile-game.md#2-nfr) · [nutrition §2](../examples/nutrition-mobile-app.md#2-nfr)

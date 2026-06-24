@@ -7,7 +7,7 @@
 | Шаг | Время | Файл |
 |-----|-------|------|
 | **1. Requirements** | 5–8 min | [workflow/01-functional-requirements.md](workflow/01-functional-requirements.md) |
-| **2. NFR** | 5–7 min | [workflow/02-non-functional-requirements.md](workflow/02-non-functional-requirements.md) |
+| **2. NFR** | 5–7 min на доске | [workflow/02-non-functional-requirements.md](workflow/02-non-functional-requirements.md) |
 | **3. High-level design** | 12–15 min | [workflow/03-high-level-design.md](workflow/03-high-level-design.md) |
 | **4. Deep Dive + Tech** | 15–18 min | [workflow/04-deep-dive.md](workflow/04-deep-dive.md) |
 
@@ -20,16 +20,14 @@ flowchart LR
     S1 --> S2 --> S3 --> S4
 ```
 
-> **Deep Dive — меню, не чеклист:** интервьюер выбирает тему. Обычно **1 блок (START §2.8)** + **0–1 из AGENDA (§3.4)**. §4.1–4.4 — pull по вопросам; примеры в `examples/` показывают образец прохода, не «всё подряд».
+> **Deep Dive — меню, не чеклист:** интервьюер выбирает тему. Обычно **1 блок (§2.8)** + **0–1 из TOP-3 (§2.6)**. Таблица bottleneck: [workflow/02 §2.8](workflow/02-non-functional-requirements.md#28-bottleneck--куда-копать-в-4). Примеры §4 — образец прохода, не «всё подряд».
 
-| Bottleneck §2.8 (START) | Open first |
-|-------------------------|------------|
-| read bandwidth / latency | §4.2 DB + Cache |
-| write fan-out / async | §4.3 Broker |
-| storage / retention | §4.2 (DB + shard) |
-| CP / RPO ≈ 0 | §4.4 → §4.2 |
-| analytics / ETL FR | §4.3 batch |
-| security / routing | §4.1 Gateway |
+| Пример | Начать с |
+|--------|----------|
+| Instagram | §4.2 |
+| PayPal | §4.4 → §4.2 |
+| VK messages | §4.2 |
+| Nutrition app | §4.3 |
 
 ## Pillars vs Implementation trade-offs
 
@@ -39,35 +37,33 @@ flowchart LR
 |------|-----|-----|----------|
 | **A. Метрики** | RPS, latency, RPO/RTO, storage | §2.1–§2.5 | **цифры**, не «выбор архитектуры» |
 | **B. Pillars** | availability, DR, scalability… | **§2.6 + §2.7** | **отметить каждый пункт** catalog |
-| **C. Implementation** | cache-aside, Kafka, semi-sync repl | §3.4 TOP-3 → §4 | **имена после trade-off gate** |
+| **C. Implementation** | cache-aside, Kafka, semi-sync repl | §4 | **имена после trade-off gate** |
 
-TOP-3 выбирается **только из слоя B** (pillars), не из 47 trade-off файлов напрямую.
+TOP-3 выбирается **только из слоя B** (§2.6, колонка `TOP-3?`), не из 47 trade-off файлов напрямую.
 
-### START · AGENDA · DETAIL
+### Как связаны §2.6, §2.8 и §4
 
-| Роль | Секция | Уровень | Вопрос |
-|------|--------|---------|--------|
-| **START** | §2.8 | entry point | С чего **начать** Deep Dive? (bottleneck) |
-| **AGENDA** | §3.4 | pillar list | Что **подготовить** к ответу (0–1 блок кроме START) |
-| **DETAIL** | §4.1–4.4 | trade-off | Как **обосновать** выбор? (tech names) |
+| Секция | Вопрос |
+|--------|--------|
+| **§2.6** | Какие **темы архитектуры** релевантны? Отметь 3 главные (TOP-3). |
+| **§2.8** | С **какого блока §4** начать? (по bottleneck) |
+| **§4** | Как **обосновать** выбор? (trade-offs, tech names) |
 
-§2.8 и §3.4 не противоречат: START может быть §4.2, AGENDA может включать pillar из §4.3.
+§2.8 и TOP-3 не противоречат: начать можно с §4.2, а в TOP-3 есть pillar, который раскрывается в §4.3.
 
 ```mermaid
 flowchart TD
     N22["§2.2 Цифры RPS/storage"]
-    N26["§2.6 Pillars ATAM"]
+    N26["§2.6 Pillars + TOP-3"]
     N27["§2.7 Processing + DR tier"]
     N28["§2.8 Bottleneck"]
-    H34["§3.4 TOP-3 из пробелов pillars"]
-    D4["§4 Deep Dive реализует pillars"]
+    D4["§4 Deep Dive trade-offs"]
 
     N22 --> N26
     N26 --> N27
     N27 --> N28
-    N26 --> H34
+    N26 --> D4
     N28 --> D4
-    H34 --> D4
 ```
 
 ### Master Catalog — pillars (§2.6)
@@ -97,6 +93,7 @@ flowchart TD
 | CP/money (PayPal) | **O3** · **S2** · **X5** | semi-sync repl, CP ledger, saga+outbox |
 | Write-heavy (VK) | **S1** · **O3** · **X2** | shard, async repl, async messaging |
 | Game backend (open-world) | **S1** · **S2** · **X2** | player shard, strong progress, async telemetry |
+| Nutrition / health app | **X2** · **X5** · **X1** | async AI scan, billing outbox, recipe cache |
 
 ## Примеры
 
@@ -106,6 +103,7 @@ flowchart TD
 | [paypal-payments.md](examples/paypal-payments.md) | CP · O3+S2+X5 |
 | [vk-social.md](examples/vk-social.md) | write-heavy · S1+O3+X2 |
 | [open-world-mobile-game.md](examples/open-world-mobile-game.md) | 20K CCU · S1+S2+X2 |
+| [nutrition-mobile-app.md](examples/nutrition-mobile-app.md) | 140K MAU · X2+X5+X1 |
 
 ## Модули знаний
 
@@ -114,7 +112,7 @@ flowchart TD
 | 1. Компоненты | 2 NFR, 3 HLD, 4 Deep Dive | LB, cache, gateway, observability |
 | 2. Хранение | 3 (schema), 4.2 | indexing, sql-nosql, norm-denorm |
 | 3. Распределённое | 2 NFR, 4.2–4.4 | replication, sharding, CAP |
-| 4. Паттерны | 2.6 pillars, 3 TOP-3, 4.3 | saga, messaging, resilience |
+| 4. Паттерны | 2.6 pillars, 4.3 | saga, messaging, resilience |
 | 5–6. Кейсы | examples | instagram, paypal |
 | 7. Capstone | vk example | vk-social |
 
@@ -134,7 +132,7 @@ flowchart TD
 
 ## Trade-offs
 
-47 тем. **Когда открывать:** шаг 2 NFR (§2.6 pillars, §2.7 processing/DR) · §3.4 TOP-3 pillars → §4 implementation · Deep Dive pull · по запросу интервьюера.
+47 тем. **Когда открывать:** шаг 2 NFR (§2.6 pillars + TOP-3, §2.7 processing/DR) · §4 implementation · Deep Dive pull · по запросу интервьюера.
 
 ### Шаг 2 NFR — §2.6 pillars + §2.7 processing/DR
 
@@ -149,7 +147,7 @@ flowchart TD
 | X4 Security | [resilience-backpressure](trade-offs/architecture/resilience-backpressure.md) |
 | X5 Distributed TX | [saga-vs-outbox](trade-offs/architecture/saga-vs-outbox.md) |
 
-### §3.4 TOP-3 pillars → §4 implementation
+### Pillars → §4 implementation
 
 | Pillar | Implementation trade-offs |
 |--------|---------------------------|

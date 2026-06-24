@@ -87,14 +87,14 @@ Peak message **~18.5K w/s** · feed read **~7.4K r/s** · burst ×3 holidays.
 | Path | Core UC | Когда | Механизм |
 |------|---------|-------|----------|
 | **Sync** | POST message, GET feed | user ждёт ACK | API → shard / cache |
-| **Async** | push delivery, post fan-out | FR-3, FR-2 | Kafka + WebSocket |
+| **Async** | push delivery, post fan-out | FR-3, FR-2 | push channel + message bus |
 | **Batch** | archive after 5y TTL | FR-5 retention | cron / cold storage |
 
 **DR tier (O3):** Warm — RPO минуты, RTO 30 min · async repl RF=3.
 
-### 2.8 Bottleneck → START §4
+### 2.8 Bottleneck → куда копать в §4
 
-**START:** message write 18.5K w/s + 580 TB → **§4.2** (pillar S1) · **AGENDA:** также O3 → §4.4, X2 → §4.3
+**Куда копать:** message write 18.5K w/s + 580 TB → Deep Dive **§4.2** (TOP-3: S1, O3, X2 — см. §2.6)
 
 ---
 
@@ -112,8 +112,8 @@ Peak message **~18.5K w/s** · feed read **~7.4K r/s** · burst ×3 holidays.
 ### 3.2 Data
 
 ```
-User M──N User (friends) · User 1──M Post · Dialog 1──M Message
-Store: PostgreSQL (social) + wide-column (messages) + Redis (feed) + Object storage (media)
+User M──N User · User 1──M Post · Dialog 1──M Message  *(ER — §1)*
+Store roles: SQL DB (social) · wide-column (messages) · Cache (feed) · Object storage (media)
 ```
 
 ### 3.3 HLD — схема системы
@@ -132,8 +132,8 @@ flowchart TB
     Msg --> MsgStore[("Message Shards")]
     Media --> ObjStore[("Object Storage")]
 
-    PostEvent[Post created] --> Broker[("Kafka")]
-    Broker --> FeedWorker[Feed Fan-out]
+    PostEvent[Post created] --> MQ[("Message Queue")]
+    MQ --> FeedWorker[Feed Fan-out]
     FeedWorker --> Cache
 ```
 
@@ -151,37 +151,21 @@ sequenceDiagram
     M-->>C: 200 ACK
 ```
 
-### 3.4 TOP-3 pillars · agenda §4
-
-| # | Pillar (ID) | ✅ Направление | §4 (блок) | Почему |
-|---|-------------|----------------|-----------|--------|
-| 1 | **S1** Scalability | message store 18.5K w/s | §4.2 | bottleneck |
-| 2 | **O3** DR | warm tier, RF=3 | §4.4 | §2.3 RPO/RTO |
-| 3 | **X2** Processing | sync ACK + async push | §4.3 | FR-3 |
-
-Implementation: Scylla, hash(dialog_id), cache-aside feed — §4, не в TOP-3.
-
 ---
 
 ## 4. Deep Dive (15–18 min) · образец прохода
 
-*Интервьюер выберет **1–2 темы** — обычно message store (START). Остальное — по вопросам.*
+*Интервьюер выберет **1–2 темы** — обычно message store. Остальное — по вопросам.*
 
-**Типичный сценарий:** START §4.2 · §4.3 или §4.4 — **если поведут**
+**Типичный сценарий:** §4.2 · §4.3 или §4.4 — **если поведут**
 
-### §4.2 DB + message store *(образец — блок START)*
+### §4.2 DB + message store *(образец — единственный блок на доске)*
 
 Scylla append-only TTL 5y · hash(`dialog_id`) · PG social graph · async RF=3.
 
-### §4.3 Broker *(pull — fan-out, если спросят)*
+**Pull (если спросят):** post fan-out queue (X2) · DR failures: hot dialog rate limit, push lag · infra sizing — таблица ниже
 
-Kafka — post fan-out 280 w/s × followers.
-
-### §4.4 Failures *(pull — DR/O3, 2–3 строки)*
-
-Hot dialog → rate limit · Push lag → pull works · Duplicate → client dedup.
-
-### Infra sizing
+### Infra sizing *(pull, ~2 min)*
 
 | Компонент | Тех | Размер | Откуда |
 |-----------|-----|--------|--------|

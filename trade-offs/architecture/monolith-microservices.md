@@ -23,7 +23,7 @@ related:
 
 ## Цепочка решений
 
-шаг 2 NFR → HLD §3.4 TOP-3 → Deep Dive §4.x (tech)
+шаг 2 NFR (§2.6 TOP-3) → HLD §3 → Deep Dive §4.x (tech)
 
 ## Monolith
 
