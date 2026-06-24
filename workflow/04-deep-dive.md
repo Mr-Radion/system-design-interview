@@ -23,7 +23,9 @@
 | Instagram | §4.2 | §4.3 по вопросу про fan-out |
 | PayPal | §4.4 → §4.2 | §4.3 saga — если спросят |
 | VK | §4.2 | §4.3 или §4.4 — по вопросу |
-| Nutrition | §4.3 | §4.2 — если спросят latency |
+| Nutrition | §4.3 |
+| Bulk messaging | §4.3 | §4.2 — если спросят latency |
+| Bulk messaging | §4.3 | §4.2 — если спросят cache |
 
 4 блока — **меню** по pillar IDs:
 
@@ -127,4 +129,4 @@ Failure modes — 2–3 строки на доске.
 
 ← [03 — HLD](03-high-level-design.md) · [FRAMEWORK](../FRAMEWORK.md)
 
-Примеры: [instagram §4](../examples/instagram-feed.md#4-deep-dive) · [paypal §4](../examples/paypal-payments.md#4-deep-dive) · [vk §4](../examples/vk-social.md#4-deep-dive) · [open-world §4](../examples/open-world-mobile-game.md#4-deep-dive) · [nutrition §4](../examples/nutrition-mobile-app.md#4-deep-dive)
+Примеры: [instagram §4](../examples/instagram-feed.md#4-deep-dive) · [paypal §4](../examples/paypal-payments.md#4-deep-dive) · [vk §4](../examples/vk-social.md#4-deep-dive) · [open-world §4](../examples/open-world-mobile-game.md#4-deep-dive) · [nutrition §4](../examples/nutrition-mobile-app.md#4-deep-dive) · [bulk-messaging §4](../examples/bulk-messaging-platform.md#4-deep-dive)

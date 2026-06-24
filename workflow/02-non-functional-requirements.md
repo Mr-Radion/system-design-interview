@@ -191,4 +191,4 @@ Failover, chaos, multi-region — §4.4, не на доске в 5 мин.
 
 ← [01 — FR](01-functional-requirements.md) · [FRAMEWORK](../FRAMEWORK.md) · [03 — HLD](03-high-level-design.md) →
 
-Примеры: [instagram §2](../examples/instagram-feed.md#2-nfr) · [paypal §2](../examples/paypal-payments.md#2-nfr) · [vk §2](../examples/vk-social.md#2-nfr) · [open-world §2](../examples/open-world-mobile-game.md#2-nfr) · [nutrition §2](../examples/nutrition-mobile-app.md#2-nfr)
+Примеры: [instagram §2](../examples/instagram-feed.md#2-nfr) · [paypal §2](../examples/paypal-payments.md#2-nfr) · [vk §2](../examples/vk-social.md#2-nfr) · [open-world §2](../examples/open-world-mobile-game.md#2-nfr) · [nutrition §2](../examples/nutrition-mobile-app.md#2-nfr) · [bulk-messaging §2](../examples/bulk-messaging-platform.md#2-nfr)

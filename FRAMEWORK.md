@@ -28,6 +28,7 @@ flowchart LR
 | PayPal | §4.4 → §4.2 |
 | VK messages | §4.2 |
 | Nutrition app | §4.3 |
+| Bulk messaging | §4.3 |
 
 ## Pillars vs Implementation trade-offs
 
@@ -94,6 +95,7 @@ flowchart TD
 | Write-heavy (VK) | **S1** · **O3** · **X2** | shard, async repl, async messaging |
 | Game backend (open-world) | **S1** · **S2** · **X2** | player shard, strong progress, async telemetry |
 | Nutrition / health app | **X2** · **X5** · **X1** | async AI scan, billing outbox, recipe cache |
+| Bulk messaging B2B | **X2** · **S1** · **X5** | Kafka dispatch, partitions, DLR outbox |
 
 ## Примеры
 
@@ -104,6 +106,7 @@ flowchart TD
 | [vk-social.md](examples/vk-social.md) | write-heavy · S1+O3+X2 |
 | [open-world-mobile-game.md](examples/open-world-mobile-game.md) | 20K CCU · S1+S2+X2 |
 | [nutrition-mobile-app.md](examples/nutrition-mobile-app.md) | 140K MAU · X2+X5+X1 |
+| [bulk-messaging-platform.md](examples/bulk-messaging-platform.md) | 1B msg/day · X2+S1+X5 |
 
 ## Модули знаний
 

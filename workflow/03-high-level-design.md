@@ -49,4 +49,4 @@ flowchart TB
 
 ← [02 — NFR](02-non-functional-requirements.md) · [FRAMEWORK](../FRAMEWORK.md) · [04 — Deep Dive](04-deep-dive.md) →
 
-Примеры: [instagram §3](../examples/instagram-feed.md#3-hld) · [paypal §3](../examples/paypal-payments.md#3-hld) · [vk §3](../examples/vk-social.md#3-hld) · [open-world §3](../examples/open-world-mobile-game.md#3-hld) · [nutrition §3](../examples/nutrition-mobile-app.md#3-hld)
+Примеры: [instagram §3](../examples/instagram-feed.md#3-hld) · [paypal §3](../examples/paypal-payments.md#3-hld) · [vk §3](../examples/vk-social.md#3-hld) · [open-world §3](../examples/open-world-mobile-game.md#3-hld) · [nutrition §3](../examples/nutrition-mobile-app.md#3-hld) · [bulk-messaging §3](../examples/bulk-messaging-platform.md#3-hld)

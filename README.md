@@ -22,6 +22,7 @@
 | [VK-like social](examples/vk-social.md) | messaging · social graph |
 | [Mobile open-world game](examples/open-world-mobile-game.md) | 20K CCU · progress · telemetry · billing |
 | [Mobile nutrition / calorie app](examples/nutrition-mobile-app.md) | AI scan · IAP billing · events pipeline |
+| [B2B bulk messaging platform](examples/bulk-messaging-platform.md) | Kafka dispatch · DLR · ClickHouse analytics |
 
 ## Trade-offs
 

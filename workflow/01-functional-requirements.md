@@ -103,4 +103,4 @@
 
 ← [FRAMEWORK](../FRAMEWORK.md) · [02 — NFR](02-non-functional-requirements.md) →
 
-Примеры: [instagram](../examples/instagram-feed.md) · [paypal](../examples/paypal-payments.md) · [vk](../examples/vk-social.md) · [open-world](../examples/open-world-mobile-game.md) · [nutrition](../examples/nutrition-mobile-app.md)
+Примеры: [instagram](../examples/instagram-feed.md) · [paypal](../examples/paypal-payments.md) · [vk](../examples/vk-social.md) · [open-world](../examples/open-world-mobile-game.md) · [nutrition](../examples/nutrition-mobile-app.md) · [bulk-messaging](../examples/bulk-messaging-platform.md)
