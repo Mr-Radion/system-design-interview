@@ -142,11 +142,13 @@ Implementation: semi-sync repl, orchestration vs 2PC — §4, не в TOP-3.
 
 ---
 
-## 4. Deep Dive (15–18 min)
+## 4. Deep Dive (15–18 min) · образец прохода
 
-**START §4.4 → §4.2** (CP ledger) → затем **§4.3** (X5 saga+outbox из agenda)
+*Интервьюер выберет **1–2 темы** — обычно CP/ledger, не все блоки. Ниже — как углубиться, если повели туда.*
 
-### §4.4 CAP + failures (primary — START)
+**Типичный сценарий:** START §4.4 → §4.2 · §4.3 saga — **только если спросят**
+
+### §4.4 CAP + failures *(образец — блок START для CP/money)*
 
 CP ledger · semi-sync repl · saga compensate on PSP timeout.
 
@@ -155,11 +157,11 @@ CP ledger · semi-sync repl · saga compensate on PSP timeout.
 | Crash after COMMIT | Outbox poller догоняет |
 | Duplicate Kafka event | Consumer dedup `event_id` |
 
-### §4.2 DB + ledger (secondary)
+### §4.2 DB + ledger *(образец — продолжение START)*
 
 PostgreSQL double-entry · hash(`account_id`) mod 4 · Redis idempotency TTL 72h.
 
-### §4.3 Broker + outbox (agenda: X5)
+### §4.3 Broker + outbox *(pull — если спросят про X5 / saga)*
 
 Kafka — outbox relay + saga events.
 

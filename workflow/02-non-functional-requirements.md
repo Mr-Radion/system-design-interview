@@ -2,7 +2,27 @@
 
 ← [FRAMEWORK](../FRAMEWORK.md)
 
-**Три слоя:** A метрики (§2.1–2.5) · **B pillars** (§2.6–2.7 Master Catalog) · C implementation (§3.4 → §4).
+**Фокус шага:** цифры, SLO, pillars — *без* имён продуктов и trade-off решений (→ шаг 4).
+
+**Три слоя:** A метрики (§2.0–2.5) · **B pillars** (§2.6–2.7 Master Catalog) · C implementation (§3.4 → §4).
+
+## 2.0 Спроси интервьюера (перед цифрами)
+
+*Перенесено из шага 1 — это вход для расчётов и pillars, не функциональные требования.*
+
+| Вопрос | Зачем | Куда в workflow |
+|--------|-------|-----------------|
+| **Scale?** DAU / MAU / CCU / registered? | вход §2.2 | расчёты RPS |
+| **Geo?** single region / multi-region? | CDN, repl, latency | §2.6 O3, X1 |
+| **Read vs write?** ratio, hot path? | bottleneck | §2.8 START |
+| **Consistency?** money / social / stale OK? | CAP, RPO | §2.6 S2, §2.3 RPO |
+| **Latency?** p99 target на sync path? | SLO | §2.3 |
+| **Retention?** how long store data? | storage / year | §2.2 |
+| **Peak vs average?** burst events? | headroom | §2.4 |
+| **SLA / RPO / RTO?** CP или eventual OK? | DR tier | §2.6 O3, §2.7 |
+| **Existing constraints?** stack, compliance? | pull | §4 по запросу |
+
+Если интервьюер молчит — назови **допущение** вслух и запиши в §2.2.
 
 ### Связь с шагом 4
 
@@ -10,7 +30,7 @@
 
 | Секция | Роль | Уровень | Что на доске | Чего не пишем |
 |--------|------|---------|--------------|---------------|
-| §2.1–2.5 | Метрики | цифры | RPS, SLA, RPO | имена продуктов |
+| §2.0–2.5 | Метрики | цифры | RPS, SLA, RPO | имена продуктов |
 | §2.6–2.7 | **Pillar scoping** | pillar | ✅/—, направление, sync/async, DR tier | cache-aside, Kafka, saga |
 | §2.8 | **START для §4** | entry point | 1 строка bottleneck → §4.x | детали trade-offs |
 | §3.4 (шаг 3) | **AGENDA для §4** | agenda | 3 pillar IDs + блок §4 | push vs pull, hash shard |
@@ -137,7 +157,7 @@ Failover, chaos, multi-region — §4.4, не на доске в 5 мин.
 | Роль | Секция | Вопрос |
 |------|--------|--------|
 | **START** | §2.8 | С чего **начать** Deep Dive? |
-| **AGENDA** | §3.4 | Что **обязательно** проговорить? |
+| **AGENDA** | §3.4 | Какие pillars **держать в голове** (0–1 блок кроме START, если поведут) |
 | **DETAIL** | §4.x | Как **обосновать** (trade-offs)? |
 
 | Если bottleneck… | START (открыть первым) | Связанный pillar |
@@ -149,7 +169,7 @@ Failover, chaos, multi-region — §4.4, не на доске в 5 мин.
 | security / routing | **§4.1** | X4 |
 | analytics / ETL FR | **§4.3** batch | X2 batch |
 
-**Пример Instagram:** bottleneck read 20 GB/s → **START §4.2**; AGENDA X1+S1 (§4.2) + X2 (§4.3) → затем §4.3.
+**Пример Instagram:** START §4.2 · AGENDA X1+S1 там же, X2 → §4.3 **если интервьюер спросит**
 
 **Вывод:** `bottleneck = X → START §4.x` · полный список тем = §3.4
 

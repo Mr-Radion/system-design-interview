@@ -153,11 +153,13 @@ Implementation: push async, hash shard when needed — §4, не в TOP-3.
 
 ---
 
-## 4. Deep Dive (15–18 min)
+## 4. Deep Dive (15–18 min) · образец прохода
 
-**START §4.2** (read bottleneck) → затем **§4.3** (X2 из agenda) · §4.4 — если осталось время
+*На собесе интервьюер выберет **1–2 темы** из START/AGENDA — не все блоки ниже. Это **пример**, как углубиться, если повели в эту сторону.*
 
-### §4.2 DB + Cache (primary — START)
+**Типичный сценарий:** START §4.2 → по вопросу §4.3 (X2) · §4.4 — только если спросят
+
+### §4.2 DB + Cache *(образец — блок START)*
 
 | Вопрос | ✅ |
 |--------|-----|
@@ -166,11 +168,11 @@ Implementation: push async, hash shard when needed — §4, не в TOP-3.
 | Media bandwidth | CloudFront + S3 |
 | HA | async repl — **HA**, stale feed OK |
 
-### §4.3 Broker (agenda: X2)
+### §4.3 Broker *(образец — если спросят про X2 / fan-out)*
 
 Kafka pub/sub — celebrity fan-out, replay при lag.
 
-### §4.4 Failures (если осталось время)
+### §4.4 Failures *(pull — 2–3 строки, если осталось время)*
 
 Cache down → PG replica · CDN miss storm → rate limit · Fan-out lag → stale OK.
 

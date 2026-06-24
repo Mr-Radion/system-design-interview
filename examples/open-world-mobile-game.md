@@ -188,11 +188,13 @@ Implementation: PostgreSQL shard, Kafka, ClickHouse, billing idempotency — §4
 
 ---
 
-## 4. Deep Dive (15–18 min)
+## 4. Deep Dive (15–18 min) · образец прохода
 
-**START §4.2** (player shard @ 20K CCU) → **§4.4** (S2 progress consistency) → **§4.3** (X2 telemetry из agenda)
+*Интервьюер выберет **1–2 темы** из 20K CCU / progress / billing. Не проходить все §4 подряд.*
 
-### §4.2 DB + player state (primary — START)
+**Типичный сценарий:** START §4.2 · §4.4 или §4.3 — **по вопросу интервьюера**
+
+### §4.2 DB + player state *(образец — блок START)*
 
 | Вопрос | ✅ |
 |--------|-----|
@@ -202,7 +204,7 @@ Implementation: PostgreSQL shard, Kafka, ClickHouse, billing idempotency — §4
 | Hot zone spike | rate limit saves/player; queue overflow → client retry |
 | HA | async repl per shard — **HA**; progress read primary on save path |
 
-### §4.4 CAP + progress (agenda: S2)
+### §4.4 CAP + progress *(pull — если спросят про S2 / RPO)*
 
 Strong consistency на progress/quest в одном shard · cross-shard clan — eventual OK · RPO ≈ 0: WAL + semi-sync на primary shard · crash mid-save → client resend with version.
 
@@ -212,7 +214,7 @@ Strong consistency на progress/quest в одном shard · cross-shard clan �
 | Duplicate save | `version` optimistic lock — 409 → client merge |
 | Billing webhook ×2 | idempotency key `store_tx_id` |
 
-### §4.3 Async + integrations (agenda: X2)
+### §4.3 Async + integrations *(pull — telemetry / billing)*
 
 | Path | ✅ |
 |------|-----|
@@ -223,7 +225,7 @@ Strong consistency на progress/quest в одном shard · cross-shard clan �
 
 Kafka partition by `player_id` — ordering events per player.
 
-### §4.1 Edge (если спросят)
+### §4.1 Edge *(pull — security / rate limit)*
 
 Rate limit per player/IP · JWT session · billing webhook IP allowlist.
 

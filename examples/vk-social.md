@@ -155,19 +155,21 @@ Implementation: Scylla, hash(dialog_id), cache-aside feed — §4, не в TOP-3
 
 ---
 
-## 4. Deep Dive (15–18 min)
+## 4. Deep Dive (15–18 min) · образец прохода
 
-**START §4.2** (message store) → затем **§4.4** (O3) и **§4.3** (X2 из agenda)
+*Интервьюер выберет **1–2 темы** — обычно message store (START). Остальное — по вопросам.*
 
-### §4.2 DB + message store (primary — START)
+**Типичный сценарий:** START §4.2 · §4.3 или §4.4 — **если поведут**
+
+### §4.2 DB + message store *(образец — блок START)*
 
 Scylla append-only TTL 5y · hash(`dialog_id`) · PG social graph · async RF=3.
 
-### §4.3 Broker (agenda: X2)
+### §4.3 Broker *(pull — fan-out, если спросят)*
 
 Kafka — post fan-out 280 w/s × followers.
 
-### §4.4 Failures (agenda: O3)
+### §4.4 Failures *(pull — DR/O3, 2–3 строки)*
 
 Hot dialog → rate limit · Push lag → pull works · Duplicate → client dedup.
 
