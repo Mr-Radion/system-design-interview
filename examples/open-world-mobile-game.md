@@ -2,11 +2,9 @@
 
 ← [FRAMEWORK.md](../FRAMEWORK.md) · [instagram-feed.md](instagram-feed.md) · [paypal-payments.md](paypal-payments.md) · [vk-social.md](vk-social.md)
 
-**Overview:** meta-game backend · open-world · **20K CCU** · account · quests · progress · friends · clans · billing · telemetry stream
+**Overview:** meta-game backend — account · quests · progress · friends · clans · billing · telemetry
 
-**200M registered · ~3M DAU · peak 20K CCU · Node.js/TS · PostgreSQL · Redis · Kafka · ClickHouse**
-
-*По мотивам вакансии mobile open-world: игровые сервисы + интеграции, без привязки к конкретному тайтлу.*
+*Mobile open-world по мотивам GTA-like; без привязки к конкретному тайтлу.*
 
 ---
 
@@ -14,22 +12,32 @@
 
 | ID | Требование | Пояснение |
 |----|------------|-----------|
-| **FR-1** | Account — регистрация, login, link соцсети | OAuth Google/Apple/VK; один аккаунт — несколько providers |
-| **FR-2** | Player progress — save/load состояния | Уровень, инвентарь, позиция в мире; **не терять** при crash |
+| **FR-1** | Account — регистрация, login, link соцсети | OAuth; один аккаунт — несколько providers |
+| **FR-2** | Player progress — save/load состояния | Уровень, инвентарь, позиция; не терять при crash |
 | **FR-3** | Quests — accept / update / complete | State machine; награды атомарно с progress |
-| **FR-4** | Friends + clans | Friend list, invite, clan roster; clan ≤ 50 members |
-| **FR-5** | In-app billing — purchase verify | Webhook от App Store / Google Play; **идемпотентен** |
-| **FR-6** | Telemetry stream | Игровые события → analytics (сессии, economy, anti-cheat signals) |
+| **FR-4** | Friends + clans | Friend list, invite; clan ≤ 50 members |
+| **FR-5** | In-app billing — purchase verify | Webhook store; идемпотентен |
+| **FR-6** | Telemetry stream | Игровые события → analytics |
 
-**Out of scope:** game physics, netcode tick-rate, voice chat, anti-cheat ML pipeline, matchmaking PvP ranked
+**UC → FR:** UC1 Login → FR-1 · UC2 Save progress → FR-2 · UC3 Complete quest → FR-3 · UC4 Clan invite → FR-4 · UC5 Purchase → FR-5 · UC6 Session events → FR-6
 
-**На собесе уточни:** meta-game API vs dedicated game-server process — здесь **backend сервисы** вокруг 20K CCU.
+**Акторы:** Player · Mobile Client · Game Server · Auth · Progress · Quest · Social · Billing Service
+
+**Интеграции:** OAuth providers (FR-1) · App Store / Google Play webhook (FR-5) · Analytics pipeline (FR-6)
+
+**Out of scope:** game physics, netcode tick-rate, voice chat, anti-cheat ML, matchmaking PvP ranked
+
+**ER:** Player 1──M QuestProgress · Player M──N Player · Clan 1──M Player
+
+**На собесе уточни:** meta-game API vs dedicated game-server — здесь backend сервисы.
 
 ---
 
 ## 2. NFR (5–7 min)
 
 ### 2.2 Расчёты
+
+**Допущения:** 200M registered · ~3M DAU · peak 20K CCU (из контекста вакансии)
 
 | Метрика | Формула | Результат |
 |---------|---------|-----------|

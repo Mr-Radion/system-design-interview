@@ -2,9 +2,7 @@
 
 ← [FRAMEWORK.md](../FRAMEWORK.md) · [instagram-feed.md](instagram-feed.md)
 
-**Overview:** post → async fan-out → feed cache · read bandwidth ~20 GB/s >> write
-
-**50M users · без geo · 1 пост / 5 дней · лента 5×/день · ~700 KB/пост**
+**Overview:** post → async fan-out → feed cache
 
 ---
 
@@ -14,18 +12,28 @@
 |----|------------|-----------|
 | **FR-1** | User загружает пост (текст + 1 фото) | Sync ACK metadata; media — presigned upload |
 | **FR-2** | Лента подписок — reverse chrono | Pagination; stale OK (секунды) |
-| **FR-3** | Like/unlike **идемпотентен** | Double-click safe |
+| **FR-3** | Like/unlike **идемпотентен** | Повторный click — тот же результат |
 | **FR-4** | Follow/unfollow — strong consistency | Unfollow сразу убирает из ленты |
 | **FR-5** | Celebrity fan-out async | N followers — не sync в POST |
-| **FR-6** | Read >> write по bandwidth | ~20 GB/s read vs ~80 MB/s write |
+| **FR-6** | Read >> write на ленте | Hot read path; write — fan-out |
+
+**UC → FR:** UC1 Загрузить пост → FR-1 · UC2 Открыть ленту → FR-2, FR-6 · UC3 Like → FR-3 · UC4 Follow → FR-4 · UC5 Celebrity публикует → FR-5
+
+**Акторы:** User · Mobile Client · Post API · Feed API · Media Service
+
+**Интеграции:** Object storage — media upload (FR-1)
 
 **Out of scope:** DMs, search, geo feed, video transcode
+
+**ER:** User 1──M Post · User M──N User · Post 1──M Like
 
 ---
 
 ## 2. NFR (5–7 min)
 
 ### 2.2 Расчёты
+
+**Допущения:** 50M users · single region · 1 пост / 5 дней · лента 5×/день · ~700 KB/пост
 
 | Метрика | Формула | Результат |
 |---------|---------|-----------|

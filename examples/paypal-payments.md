@@ -2,9 +2,7 @@
 
 ← [FRAMEWORK.md](../FRAMEWORK.md) · [instagram-feed.md](instagram-feed.md)
 
-**Overview:** POST transfer → saga → ledger debit/credit · CP ledger, RPO ≈ 0
-
-**100M accounts · P2P + merchant checkout**
+**Overview:** POST transfer → saga → ledger debit/credit
 
 ---
 
@@ -19,13 +17,23 @@
 | **FR-5** | Ledger **immutable** — audit trail | Компенсация = adjusting entry |
 | **FR-6** | Balance read только с **primary** shard | Не с async replica |
 
+**UC → FR:** UC1 P2P перевод → FR-1, FR-4 · UC2 Merchant checkout → FR-2 · UC3 Проверить баланс → FR-6
+
+**Акторы:** User · Merchant · Payment API · Wallet API · Saga Orchestrator · PSP
+
+**Интеграции:** PSP — hold/capture/settle (FR-2)
+
 **Out of scope:** FX, chargeback automation, crypto
+
+**ER:** Account 1──M LedgerEntry · Payment 1──M LedgerEntry · Merchant 1──M Payment
 
 ---
 
 ## 2. NFR (5–7 min)
 
 ### 2.2 Расчёты
+
+**Допущения:** 100M accounts · P2P + merchant checkout · CP ledger
 
 | Метрика | Формула | Результат |
 |---------|---------|-----------|

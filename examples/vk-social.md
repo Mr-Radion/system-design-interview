@@ -2,9 +2,7 @@
 
 ← [FRAMEWORK.md](../FRAMEWORK.md) · [instagram-feed.md](instagram-feed.md) · [paypal-payments.md](paypal-payments.md)
 
-**Overview:** social graph + feed + messaging · bottleneck = **18.5K msg w/s + 580 TB retention**
-
-**80M DAU · friends + feed + messages + media · messages retention 5 лет**
+**Overview:** social graph + feed + messaging
 
 ---
 
@@ -19,13 +17,23 @@
 | **FR-5** | Retention messages **5 лет** | Append-only; TTL после 5y |
 | **FR-6** | Hot dialog / celebrity messaging | Один dialog_id — write hotspot |
 
+**UC → FR:** UC1 Подписаться → FR-1 · UC2 Лента друзей → FR-2 · UC3 Отправить сообщение → FR-3, FR-4 · UC4 История диалога → FR-5, FR-6
+
+**Акторы:** User · Client · Social Service · Feed Service · Message Service · Media Service
+
+**Интеграции:** Object storage — media · Push/WebSocket — delivery async (FR-3)
+
 **Out of scope:** groups, voice/video, E2E encryption, global search
+
+**ER:** User M──N User · User 1──M Post · Dialog 1──M Message
 
 ---
 
 ## 2. NFR (5–7 min)
 
 ### 2.2 Расчёты
+
+**Допущения:** 80M DAU · messages retention 5 лет · friends + feed + messages + media
 
 | Метрика | Формула | Результат |
 |---------|---------|-----------|
