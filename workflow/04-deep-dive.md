@@ -104,4 +104,4 @@ Failure modes — 2–3 строки на доске.
 
 ← [03 — HLD](03-high-level-design.md) · [FRAMEWORK](../FRAMEWORK.md)
 
-Примеры: [instagram §4](../examples/instagram-feed.md#4-deep-dive) · [paypal §4](../examples/paypal-payments.md#4-deep-dive) · [vk §4](../examples/vk-social.md#4-deep-dive)
+Примеры: [instagram §4](../examples/instagram-feed.md#4-deep-dive) · [paypal §4](../examples/paypal-payments.md#4-deep-dive) · [vk §4](../examples/vk-social.md#4-deep-dive) · [open-world §4](../examples/open-world-mobile-game.md#4-deep-dive)

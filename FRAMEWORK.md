@@ -96,6 +96,7 @@ flowchart TD
 | Read-heavy (Instagram) | **X1** · **S1** · **X2** | cache-aside, CDN, push async |
 | CP/money (PayPal) | **O3** · **S2** · **X5** | semi-sync repl, CP ledger, saga+outbox |
 | Write-heavy (VK) | **S1** · **O3** · **X2** | shard, async repl, async messaging |
+| Game backend (open-world) | **S1** · **S2** · **X2** | player shard, strong progress, async telemetry |
 
 ## Примеры
 
@@ -104,6 +105,7 @@ flowchart TD
 | [instagram-feed.md](examples/instagram-feed.md) | read-heavy · X1+S1+X2 |
 | [paypal-payments.md](examples/paypal-payments.md) | CP · O3+S2+X5 |
 | [vk-social.md](examples/vk-social.md) | write-heavy · S1+O3+X2 |
+| [open-world-mobile-game.md](examples/open-world-mobile-game.md) | 20K CCU · S1+S2+X2 |
 
 ## Модули знаний
 

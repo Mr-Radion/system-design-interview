@@ -40,4 +40,4 @@
 
 ← [FRAMEWORK](../FRAMEWORK.md) · Дальше: [02 — NFR](02-non-functional-requirements.md) →
 
-Примеры: [instagram-feed.md](../examples/instagram-feed.md) · [paypal-payments.md](../examples/paypal-payments.md) · [vk-social.md](../examples/vk-social.md)
+Примеры: [instagram-feed.md](../examples/instagram-feed.md) · [paypal-payments.md](../examples/paypal-payments.md) · [vk-social.md](../examples/vk-social.md) · [open-world-mobile-game.md](../examples/open-world-mobile-game.md)

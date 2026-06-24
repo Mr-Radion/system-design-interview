@@ -20,6 +20,7 @@
 | [Instagram-like feed](examples/instagram-feed.md) | read-heavy · CDN · cache |
 | [PayPal-like payments](examples/paypal-payments.md) | saga · outbox · CP ledger |
 | [VK-like social](examples/vk-social.md) | messaging · social graph |
+| [Mobile open-world game](examples/open-world-mobile-game.md) | 20K CCU · progress · telemetry · billing |
 
 ## Trade-offs
 
