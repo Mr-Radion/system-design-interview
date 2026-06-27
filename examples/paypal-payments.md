@@ -31,74 +31,40 @@
 
 ## 2. NFR (5–7 min)
 
-### 2.2 Расчёты
+### 2.1 Цифры на доску
 
 **Допущения:** 100M accounts · P2P + merchant checkout · CP ledger
 
-| Метрика | Формула | Результат |
-|---------|---------|-----------|
-| Accounts | — | **100M** |
-| Peak TPS | 100M × 5/mo ÷ 30 ÷ 86_400 | **~1_000** |
-| Ledger rows/mo | 500M tx × 2 entries | **~1B** |
-| Storage / mo | 1B × 200 B | **~200 GB** |
+| Вопрос | Формула / допущение | Результат | На доске |
+|--------|---------------------|-----------|----------|
+| Accounts | — | **100M** | 100M |
+| Peak TPS | 100M × 5/mo ÷ 30 ÷ 86_400 | **~1_000** | ~1K TPS |
+| Ledger rows/mo | 500M tx × 2 entries | **~1B** | 1B rows/mo |
+| Storage / mo | 1B × 200 B | **~200 GB** | ~200 GB/mo |
+| Peak burst | avg × ×3 payday | **~3K TPS** | burst ×3 |
+| Initiate p99 | API + idempotency + saga ~108 ms p50 | **≤ 500 ms** | p99 ≤ 500 ms |
+| Settle E2E p95 | async saga | **≤ 5 s** | settle ≤ 5 s |
+| SLA uptime | product | **99.99%** | 99.99% |
+| RPO / RTO | CP ledger | **≈ 0** · **< 1 min** | RPO ≈ 0 · RTO 1m |
 
 **Драйвер:** FR-6 — CP ledger, RPO ≈ 0; saga + cross-shard P2P.
 
-### 2.3 SLA / SLO
+### 2.2 Pillars + вывод
 
-| Метрика | Цель |
-|---------|------|
-| Initiate p99 | **≤ 500 ms** |
-| Settle E2E p95 | **≤ 5 s** |
-| SLA uptime | **99.99%** |
-| RPO ledger | **≈ 0** · RTO **< 1 min** |
+| ID | Pillar | Что спросят | На доске | типично для |
+|----|--------|-------------|----------|-------------|
+| O1 | Availability | semi-sync repl — HA | ✅ | — |
+| O2 | Continuity | — | — | — |
+| O3 | DR | hot tier | **TOP-3** | CP/money |
+| S1 | Scalability | 4 shards hash account_id | ✅ | CP/money |
+| S2 | Consistency | CP ledger | **TOP-3** | CP/money |
+| X1 | Caching | key-value dedup | ✅ | — |
+| X2 | Processing | sync initiate, async settle | ✅ | CP/money |
+| X3 | Observability | saga/outbox SLO | ✅ | — |
+| X4 | Security | JWT, rate limit, PCI scope | ✅ | payments |
+| X5 | Distributed TX | saga + outbox | **TOP-3** | CP/money |
 
-**POST /transfers breakdown:**
-
-| Этап | p50 | p99 |
-|------|-----|-----|
-| API + idempotency + saga reserve | ~108 ms | **≤ 500 ms** |
-
-### 2.4 Throughput
-
-Peak ~1_000 TPS · ledger ~2K row writes/s · burst ×3 payday · headroom ×2.
-
-### 2.5 Observability
-
-| Метрика | Зачем |
-|---------|-------|
-| `saga_step_lag_seconds` | stuck payments |
-| `outbox_unpublished_count` | lost events risk |
-| `ledger_balance_drift` | CP invariant |
-
-### 2.6 Master Catalog — pillars
-
-| ID | Pillar | ✅ / — | Направление | Почему §2.2/FR | TOP-3? |
-|----|--------|--------|-------------|----------------|--------|
-| O1 | Availability | ✅ | semi-sync repl — HA | SLA 99.99% | — |
-| O2 | Continuity | — | — | не спрашивали | — |
-| O3 | DR | ✅ | **hot** tier | RPO ≈ 0, RTO < 1 min | **да** |
-| S1 | Scalability | ✅ | 4 shards hash account_id | ~1K TPS | — |
-| S2 | Consistency | ✅ | CP ledger | FR-6, RPO ≈ 0 | **да** |
-| X1 | Caching | ✅ | key-value dedup | sync path | — |
-| X2 | Processing | ✅ | sync initiate, async settle | FR-2 merchant | — |
-| X3 | Observability | ✅ | §2.5 metrics | saga/outbox SLO | — |
-| X4 | Security | ✅ | JWT, rate limit, PCI scope | FR-4 idempotency | — |
-| X5 | Distributed TX | ✅ | saga + outbox | cross-shard P2P | **да** |
-
-### 2.7 Processing paths + DR tier
-
-| Path | Core UC | Когда | Механизм |
-|------|---------|-------|----------|
-| **Sync** | POST /transfers, balance read | user ждёт ACK | API → ledger primary |
-| **Async** | merchant settle, saga steps | PSP timeout, cross-shard | message bus + orchestrator |
-| **Batch** | — | — | N/A |
-
-**DR tier (O3):** Hot — RPO ≈ 0, RTO < 1 min · semi-sync repl, auto failover.
-
-### 2.8 Bottleneck → куда копать в §4
-
-**Куда копать:** CP ledger + RPO ≈ 0 → Deep Dive **§4.4 → §4.2** (TOP-3: O3, S2, X5 — см. §2.6)
+**Вывод:** CP ledger + RPO ≈ 0 → **§4.4 → §4.2** · **TOP-3:** O3 · S2 · X5
 
 ---
 
@@ -175,10 +141,10 @@ sequenceDiagram
 | Компонент | Тех | Размер | Откуда |
 |-----------|-----|--------|--------|
 | Orchestrator | Temporal | workflow state | saga steps |
-| Broker | Kafka ×5 | outbox + saga | §2.2 TPS |
-| Ledger DB | PG 4 shards, sync repl | ~200 GB/mo | §2.2 storage |
+| Broker | Kafka ×5 | outbox + saga | §2.1 TPS |
+| Ledger DB | PG 4 shards, sync repl | ~200 GB/mo | §2.1 storage |
 | Idempotency | Redis cluster | TTL 72h | sync path |
-| Gateway | ALB L7 | ~1K TPS | §2.2 peak |
+| Gateway | ALB L7 | ~1K TPS | §2.1 peak |
 
 ---
 

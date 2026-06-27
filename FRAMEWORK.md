@@ -20,7 +20,7 @@ flowchart LR
     S1 --> S2 --> S3 --> S4
 ```
 
-> **Deep Dive — меню, не чеклист:** интервьюер выбирает тему. Обычно **1 блок (§2.8)** + **0–1 из TOP-3 (§2.6)**. Таблица bottleneck: [workflow/02 §2.8](workflow/02-non-functional-requirements.md#28-bottleneck--куда-копать-в-4). Примеры §4 — образец прохода, не «всё подряд».
+> **Deep Dive — меню, не чеклист:** интервьюер выбирает тему. Обычно **1 блок (вывод §2.2)** + **0–1 из TOP-3**. Таблица bottleneck: [workflow/04 — Routing table](workflow/04-deep-dive.md#routing-table). Примеры §4 — образец прохода, не «всё подряд».
 
 | Пример | Начать с |
 |--------|----------|
@@ -36,66 +36,50 @@ flowchart LR
 
 | Слой | Что | Где | На доске |
 |------|-----|-----|----------|
-| **A. Метрики** | RPS, latency, RPO/RTO, storage | §2.1–§2.5 | **цифры**, не «выбор архитектуры» |
-| **B. Pillars** | availability, DR, scalability… | **§2.6 + §2.7** | **отметить каждый пункт** catalog |
+| **A. Метрики** | RPS, latency, RPO/RTO, storage | **§2.1** | **цифры**, не «выбор архитектуры» |
+| **B. Pillars** | availability, DR, scalability… | **§2.2** | **отметить каждый пункт** catalog + TOP-3 |
 | **C. Implementation** | cache-aside, Kafka, semi-sync repl | §4 | **имена после trade-off gate** |
 
-TOP-3 выбирается **только из слоя B** (§2.6, колонка `TOP-3?`), не из 47 trade-off файлов напрямую.
+TOP-3 выбирается **только из слоя B** (§2.2, колонка «На доске»), не из 47 trade-off файлов напрямую.
 
-### Как связаны §2.6, §2.8 и §4
+### Как связаны §2.2 и §4
 
 | Секция | Вопрос |
 |--------|--------|
-| **§2.6** | Какие **темы архитектуры** релевантны? Отметь 3 главные (TOP-3). |
-| **§2.8** | С **какого блока §4** начать? (по bottleneck) |
+| **§2.2 pillars** | Какие **темы архитектуры** релевантны? Отметь 3 главные (TOP-3). |
+| **§2.2 вывод** | С **какого блока §4** начать? (по bottleneck) |
 | **§4** | Как **обосновать** выбор? (trade-offs, tech names) |
 
-§2.8 и TOP-3 не противоречат: начать можно с §4.2, а в TOP-3 есть pillar, который раскрывается в §4.3.
+Вывод и TOP-3 не противоречат: начать можно с §4.2, а в TOP-3 есть pillar, который раскрывается в §4.3.
 
 ```mermaid
 flowchart TD
-    N22["§2.2 Цифры RPS/storage"]
-    N26["§2.6 Pillars + TOP-3"]
-    N27["§2.7 Processing + DR tier"]
-    N28["§2.8 Bottleneck"]
+    N21["§2.1 Цифры RPS/storage"]
+    N22["§2.2 Pillars + TOP-3 + вывод"]
     D4["§4 Deep Dive trade-offs"]
 
-    N22 --> N26
-    N26 --> N27
-    N27 --> N28
-    N26 --> D4
-    N28 --> D4
+    N21 --> N22
+    N22 --> D4
 ```
 
-### Master Catalog — pillars (§2.6)
+### Master Catalog — pillars (§2.2)
 
 | ID | Категория | Pillar | Выбирается в | Детали в Deep Dive |
 |----|-----------|--------|--------------|-------------------|
-| O1 | Operational | **Availability** | §2.6 | §4.2 replication |
-| O2 | Operational | **Continuity** | §2.6 | §4.1 / pull deployment |
-| O3 | Operational | **DR** | §2.6 + **§2.7 tier** | §4.4 DR |
-| S1 | Structural | **Scalability** | §2.6 | §4.2 cache, shard, CDN |
-| S2 | Structural | **Consistency (CAP)** | §2.6 | §4.4 CAP |
-| X1 | Cross-cutting | **Caching** | §2.6 | §4.2 caching-patterns |
-| X2 | Cross-cutting | **Processing model** | **§2.7** | §4.3 messaging, batch |
-| X3 | Cross-cutting | **Observability** | §2.5 + §2.6 | pull observability |
-| X4 | Cross-cutting | **Security / Auth** | §2.6 | §4.1 gateway |
-| X5 | Cross-cutting | **Distributed TX** | §2.6 | §4.3 saga-outbox |
+| O1 | Operational | **Availability** | §2.2 | §4.2 replication |
+| O2 | Operational | **Continuity** | §2.2 | §4.1 / pull deployment |
+| O3 | Operational | **DR** | §2.2 | §4.4 DR tier |
+| S1 | Structural | **Scalability** | §2.2 | §4.2 cache, shard, CDN |
+| S2 | Structural | **Consistency (CAP)** | §2.2 | §4.4 CAP |
+| X1 | Cross-cutting | **Caching** | §2.2 | §4.2 caching-patterns |
+| X2 | Cross-cutting | **Processing model** | §2.2 | §4.3 messaging, batch |
+| X3 | Cross-cutting | **Observability** | §2.2 (pull) | §4 pull observability |
+| X4 | Cross-cutting | **Security / Auth** | §2.2 | §4.1 gateway |
+| X5 | Cross-cutting | **Distributed TX** | §2.2 | §4.3 saga-outbox |
 
-**Pull (не в §2.6 pass):** Extensibility, Maintainability, Portability → [Pull-on-demand](#pull-on-demand-не-на-доске-по-умолчанию).
+**Pull (не в §2.2 pass):** Extensibility, Maintainability, Portability → [Pull-on-demand](#pull-on-demand-не-на-доске-по-умолчанию).
 
 **Правило репликации:** Replication = HA/DR (O1, O3), не read scale. Read throughput → X1/S1 (CDN, cache).
-
-### Типичные TOP-3 по типу задачи
-
-| Тип | Pillar IDs | Implementation (§4) |
-|-----|------------|---------------------|
-| Read-heavy (Instagram) | **X1** · **S1** · **X2** | cache-aside, CDN, push async |
-| CP/money (PayPal) | **O3** · **S2** · **X5** | semi-sync repl, CP ledger, saga+outbox |
-| Write-heavy (VK) | **S1** · **O3** · **X2** | shard, async repl, async messaging |
-| Game backend (open-world) | **S1** · **S2** · **X2** | player shard, strong progress, async telemetry |
-| Nutrition / health app | **X2** · **X5** · **X1** | async AI scan, billing outbox, recipe cache |
-| Bulk messaging B2B | **X2** · **S1** · **X5** | Kafka dispatch, partitions, DLR outbox |
 
 ## Примеры
 
@@ -115,7 +99,7 @@ flowchart TD
 | 1. Компоненты | 2 NFR, 3 HLD, 4 Deep Dive | LB, cache, gateway, observability |
 | 2. Хранение | 3 (schema), 4.2 | indexing, sql-nosql, norm-denorm |
 | 3. Распределённое | 2 NFR, 4.2–4.4 | replication, sharding, CAP |
-| 4. Паттерны | 2.6 pillars, 4.3 | saga, messaging, resilience |
+| 4. Паттерны | 2.2 pillars, 4.3 | saga, messaging, resilience |
 | 5–6. Кейсы | examples | instagram, paypal |
 | 7. Capstone | vk example | vk-social |
 
@@ -135,9 +119,9 @@ flowchart TD
 
 ## Trade-offs
 
-47 тем. **Когда открывать:** шаг 2 NFR (§2.6 pillars + TOP-3, §2.7 processing/DR) · §4 implementation · Deep Dive pull · по запросу интервьюера.
+47 тем. **Когда открывать:** шаг 2 NFR (§2.2 pillars + TOP-3) · §4 implementation · Deep Dive pull · по запросу интервьюера.
 
-### Шаг 2 NFR — §2.6 pillars + §2.7 processing/DR
+### Шаг 2 NFR — §2.2 pillars
 
 | Pillar | Trade-off |
 |--------|-----------|

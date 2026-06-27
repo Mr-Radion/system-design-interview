@@ -97,7 +97,7 @@
 ## Перед шагом 2
 
 - [ ] Overview · core FR · Out of scope
-- [ ] Цифры не писали → [02 — NFR](02-non-functional-requirements.md), сначала **§2.0 спроси интервьюера**
+- [ ] Цифры не писали → [02 — NFR](02-non-functional-requirements.md), **§2.1 Цифры на доску**
 
 ---
 

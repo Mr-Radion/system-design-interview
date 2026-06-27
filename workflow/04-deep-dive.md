@@ -2,18 +2,18 @@
 
 ← [FRAMEWORK](../FRAMEWORK.md)
 
-**Фокус шага:** интервьюер **сам выбирает**, куда копать. Обычно **1 блок по bottleneck (§2.8)** + **ещё 0–1 из TOP-3 (§2.6)** — не все §4.1–4.4 подряд.
+**Фокус шага:** интервьюер **сам выбирает**, куда копать. Обычно **1 блок по bottleneck (вывод §2.2)** + **ещё 0–1 из TOP-3** — не все §4.1–4.4 подряд.
 
 | Сколько | Что | Кто решает |
 |---------|-----|------------|
-| **1 блок** | §4.x из §2.8 | ты предлагаешь по bottleneck |
-| **+0–1 блок** | второй pillar из TOP-3 §2.6 | интервьюер ведёт вопросами |
+| **1 блок** | §4.x из вывода §2.2 | ты предлагаешь по bottleneck |
+| **+0–1 блок** | второй pillar из TOP-3 §2.2 | интервьюер ведёт вопросами |
 | **остальное** | строки из меню ниже | только если спросил / 2–3 min в конце |
 
 > **Правило шага 4:**
-> 1. Предложи блок из §2.8 («bottleneck → начну отсюда»)
+> 1. Предложи блок из вывода §2.2 («bottleneck → начну отсюда»)
 > 2. Если интервьюер согласен — **углубись в 1 блок** (2–4 trade-off вопроса, не все строки таблицы)
-> 3. **Второй блок** — только если повёл туда или осталось ~5 min (из TOP-3 §2.6)
+> 3. **Второй блок** — только если повёл туда или осталось ~5 min (из TOP-3 §2.2)
 > 4. §4.1–4.4 ниже — **меню pull**, не обязательный маршрут
 
 **Мини-примеры прохода** (в [examples/](../examples/) §4) — образец *как* раскрыть 1–2 блока, не план «пройти всё».
@@ -24,7 +24,7 @@
 | PayPal | §4.4 → §4.2 | §4.3 saga — если спросят |
 | VK | §4.2 | §4.3 или §4.4 — по вопросу |
 | Nutrition | §4.3 |
-| Bulk messaging | §4.3 | §4.2 — если спросят latency |
+| Open-world | §4.2 |
 | Bulk messaging | §4.3 | §4.2 — если спросят cache |
 
 4 блока — **меню** по pillar IDs:
@@ -38,15 +38,24 @@
 
 ## Routing table
 
-Единая таблица bottleneck → §4: [workflow/02 §2.8](02-non-functional-requirements.md#28-bottleneck--куда-копать-в-4).
+| Если bottleneck… | Начать с | Связанные pillars (§2.2) |
+|------------------|----------|--------------------------|
+| read bandwidth / latency | **§4.2** | X1, S1 |
+| write fan-out / async | **§4.3** | X2 |
+| storage / retention | **§4.2** | S1 |
+| CP / RPO ≈ 0 | **§4.4** → **§4.2** | O3, S2 |
+| security / routing | **§4.1** | X4 |
+| analytics / ETL FR | **§4.3** batch | X2 |
 
 | Пример | Начать с |
 |--------|-------|
 | Instagram | §4.2 |
 | PayPal | §4.4 → §4.2 |
 | VK | §4.2 |
+| Nutrition | §4.3 |
+| Bulk messaging | §4.3 |
 
-**Имя продукта (Kafka, Redis) — только после trade-off gate в §4**, с привязкой к §2.2.
+**Имя продукта (Kafka, Redis) — только после trade-off gate в §4**, с привязкой к §2.1.
 
 ---
 
@@ -89,7 +98,7 @@
 | Distributed TX? | [saga-outbox](../trade-offs/architecture/saga-vs-outbox.md) | outbox + orchestrator |
 | Reports / archive? | [batch-vs-stream](../trade-offs/architecture/batch-vs-stream.md) | cron / Airflow / ETL |
 
-**Sync vs Async vs Batch** — решение в §2.7; здесь только implementation.
+**Sync vs Async vs Batch** — выбор path в §4.3; здесь только implementation.
 
 ---
 
@@ -103,7 +112,7 @@
 | RPO/RTO | [availability-slo](../trade-offs/constraints/availability-slo-rpo-rto.md) |
 | DR pattern | [disaster-recovery](../trade-offs/architecture/disaster-recovery-pattern.md) |
 
-**DR cheat sheet (после tier §2.7):**
+**DR cheat sheet (tier → §4.4):**
 
 | Tier | Backup | Standby | Failover |
 |------|--------|---------|----------|
@@ -119,11 +128,11 @@ Failure modes — 2–3 строки на доске.
 
 | Компонент | Тех | Размер | Откуда |
 |-----------|-----|--------|--------|
-| CDN | … | ~X GB/s | §2.2 bandwidth |
-| Cache | … | hot users | §2.2 read QPS |
-| DB | … | shards + repl | §2.2 |
-| API | … | ~N r/s | §2.2 × headroom |
-| Broker | … | fan-out | §2.2 write QPS |
+| CDN | … | ~X GB/s | §2.1 bandwidth |
+| Cache | … | hot users | §2.1 read QPS |
+| DB | … | shards + repl | §2.1 |
+| API | … | ~N r/s | §2.1 × headroom |
+| Broker | … | fan-out | §2.1 write QPS |
 
 ---
 

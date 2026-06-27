@@ -35,81 +35,42 @@
 
 ## 2. NFR (5–7 min)
 
-### 2.2 Расчёты
+### 2.1 Цифры на доску
 
-**Допущения:** 200M registered · ~3M DAU · peak 20K CCU (из контекста вакансии)
+**Допущения:** 200M registered · ~3M DAU · peak 20K CCU
 
-| Метрика | Формула | Результат |
-|---------|---------|-----------|
-| Registered | из контекста | **200M** |
-| DAU | оценка (~1.5% reg) | **~3M** |
-| Peak CCU | из вакансии | **20K** |
-| Login QPS | 3M × 2 ÷ 86_400 | **~70** avg · **~700** peak |
-| Progress save w/s | 20K ÷ 300 s (каждые 5 min) | **~67** |
-| Quest event w/s | 20K × 0.3/min ÷ 60 | **~100** |
-| Telemetry events/s | 20K × 5/min ÷ 60 | **~1_700** |
-| Progress storage | 3M × 50 KB profile | **~150 GB** hot |
+| Вопрос | Формула / допущение | Результат | На доске |
+|--------|---------------------|-----------|----------|
+| Registered / DAU | ~1.5% reg | **200M / ~3M** | 3M DAU |
+| Peak CCU | из контекста | **20K** | 20K CCU |
+| Login QPS peak | 3M × 2 ÷ 86_400 × ×10 patch | **~700** | ~700 login/s peak |
+| Progress save w/s | 20K ÷ 300 s | **~67** | ~67 w/s |
+| Quest event w/s | 20K × 0.3/min ÷ 60 | **~100** | ~100 w/s |
+| Telemetry events/s | 20K × 5/min ÷ 60 | **~1_700** | ~1.7K events/s |
+| Progress storage | 3M × 50 KB | **~150 GB** | ~150 GB hot |
+| Progress save p99 | 1× SSD + DC | **≤ 300 ms** | p99 ≤ 300 ms |
+| Login p99 | cache + SSD | **≤ 500 ms** | p99 ≤ 500 ms |
+| SLA uptime | product | **99.9%** | 99.9% |
+| RPO / RTO | progress CP | **≈ 0** · **< 15 min** | RPO ≈ 0 · RTO 15m |
 
 **Драйвер:** FR-2/FR-6 — **player state writes** + **telemetry flood** при 20K CCU.
 
-### 2.3 SLA / SLO
+### 2.2 Pillars + вывод
 
-| Метрика | Цель |
-|---------|------|
-| Login p99 | **≤ 500 ms** |
-| Progress save p99 | **≤ 300 ms** (sync ACK) |
-| Quest complete p99 | **≤ 500 ms** |
-| Billing verify p99 | **≤ 2 s** |
-| SLA uptime | **99.9%** |
-| RPO progress | **≈ 0** (потеря save недопустима) · RTO **< 15 min** |
+| ID | Pillar | Что спросят | На доске | типично для |
+|----|--------|-------------|----------|-------------|
+| O1 | Availability | multi-AZ, repl — HA | ✅ | — |
+| O2 | Continuity | rolling deploy без downtime | ✅ | — |
+| O3 | DR | warm tier | ✅ | game |
+| S1 | Scalability | shard player_id, 20K CCU | **TOP-3** | game |
+| S2 | Consistency | strong progress/quest | **TOP-3** | game |
+| X1 | Caching | hot profile cache | ✅ | — |
+| X2 | Processing | sync save + async telemetry | **TOP-3** | game |
+| X3 | Observability | load tests | ✅ | — |
+| X4 | Security | OAuth, billing signature | ✅ | payments |
+| X5 | Distributed TX | quest reward + progress | ✅ | — |
 
-### 2.4 Throughput
-
-Peak CCU **20K** · login burst ×10 (релиз патча) · telemetry burst ×3 (ивент в зоне) · headroom ×2.
-
-### 2.5 Observability
-
-| Метрика | Зачем |
-|---------|-------|
-| `ccu_active` | capacity vs 20K target |
-| `progress_save_p99_ms` | FR-2 SLO |
-| `telemetry_lag_seconds` | ClickHouse pipeline health |
-| `billing_webhook_dedup_rate` | FR-5 idempotency |
-
-### 2.6 Master Catalog — pillars
-
-| ID | Pillar | ✅ / — | Направление | Почему §2.2/FR | TOP-3? |
-|----|--------|--------|-------------|----------------|--------|
-| O1 | Availability | ✅ | multi-AZ, repl — HA | SLA 99.9%, 20K CCU | — |
-| O2 | Continuity | ✅ | rolling deploy без downtime | патчи часто | — |
-| O3 | DR | ✅ | warm tier | RPO progress ≈ 0 | — |
-| S1 | Scalability | ✅ | shard player_id, 20K CCU | §2.2 | **да** |
-| S2 | Consistency | ✅ | strong progress/quest | FR-2, FR-3 | **да** |
-| X1 | Caching | ✅ | hot profile cache | login, friend list | — |
-| X2 | Processing | ✅ | sync save + async telemetry | FR-6, billing | **да** |
-| X3 | Observability | ✅ | §2.5 + load tests | нагрузочные тесты | — |
-| X4 | Security | ✅ | OAuth, billing signature | FR-1, FR-5 | — |
-| X5 | Distributed TX | ✅ | quest reward + progress | FR-3, FR-5 | — |
-
-### 2.7 Processing paths + DR tier
-
-| Path | Core UC | Когда | Механизм |
-|------|---------|-------|----------|
-| **Sync** | progress save, quest complete, login | user ждёт ACK | API → SQL DB shard |
-| **Async** | telemetry, billing webhook, clan notify | FR-5, FR-6 | message bus → workers |
-| **Batch** | analytics aggregates, retention | daily reports | analytics warehouse ETL |
-
-**DR tier (O3):** Warm — RPO ≈ 0 на progress (semi-sync/WAL), RTO 15 min.
-
-### 2.8 Bottleneck → куда копать в §4
-
-**Куда копать:** 20K CCU → progress writes + telemetry ~1.7K events/s → Deep Dive **§4.2** (TOP-3: S1, S2, X2 — см. §2.6)
-
-**На собесе акцент (помимо bottleneck):**
-- потеря progress при crash — **S2, RPO ≈ 0**
-- hot zone / clan event — write spike на один shard
-- billing duplicate webhook — **X5 idempotency**
-- telemetry не блокирует gameplay — **async path**
+**Вывод:** 20K CCU → progress writes + telemetry ~1.7K events/s → **§4.2** · **TOP-3:** S1 · S2 · X2
 
 ---
 
@@ -207,10 +168,10 @@ sequenceDiagram
 
 | Компонент | Тех | Размер | Откуда |
 |-----------|-----|--------|--------|
-| API | Node.js K8s | ~2K RPS headroom | §2.2 login+quest peak |
-| Player DB | PostgreSQL 16 shards | ~150 GB + growth | §2.2 storage |
-| Cache | Redis cluster | hot 20K CCU profiles | §2.2 CCU |
-| Broker | Kafka ×3 | ~2K msg/s telemetry | §2.2 events/s |
+| API | Node.js K8s | ~2K RPS headroom | §2.1 login+quest peak |
+| Player DB | PostgreSQL 16 shards | ~150 GB + growth | §2.1 storage |
+| Cache | Redis cluster | hot 20K CCU profiles | §2.1 CCU |
+| Broker | Kafka ×3 | ~2K msg/s telemetry | §2.1 events/s |
 | Analytics | ClickHouse | telemetry 90d | batch from Kafka |
 | Game servers | dedicated fleet | 20K CCU | out of API scope |
 

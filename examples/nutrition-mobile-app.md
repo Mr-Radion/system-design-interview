@@ -42,92 +42,41 @@
 
 ## 2. NFR (5–7 min)
 
-### 2.2 Расчёты
+### 2.1 Цифры на доску
 
-**Допущения:** 140K MAU · DAU 35K (25%) · 8 recipe reads/day · 3 food logs/day · 0.3 AI scans/day · 20 events/day · ~500 KB/scan photo · ~2 KB/food log row · 3K recipes × ~15 KB metadata
+**Допущения:** 140K MAU · DAU 35K (25%) · 8 recipe reads/day · 3 food logs/day · 0.3 AI scans/day · ~500 KB/scan · ~2 KB/food log
 
-| Метрика | Формула | Результат |
-|---------|---------|-----------|
-| MAU / DAU | из контекста / 25% | **140K / 35K** |
-| Recipe read QPS | 35K × 8 ÷ 86_400 | **~3.2** |
-| Food log write QPS | 35K × 3 ÷ 86_400 | **~1.2** |
-| AI scan submit QPS | 35K × 0.3 ÷ 86_400 | **~0.12** |
-| Analytics events/s | 35K × 20 ÷ 86_400 | **~8** |
-| Read:Write (API) | | **~3 : 1** |
-| Scan storage / year | 0.12 × 500KB × 86_400 × 365 | **~1.9 TB** photos |
-| Food log storage / year | 1.2 × 2KB × 86_400 × 365 | **~75 GB** |
-| AI inference jobs / day | 35K × 0.3 | **~10.5K** |
+| Вопрос | Формула / допущение | Результат | На доске |
+|--------|---------------------|-----------|----------|
+| MAU / DAU | 25% MAU | **140K / 35K** | 35K DAU |
+| Recipe read QPS | 35K × 8 ÷ 86_400 | **~3.2** | ~3 r/s |
+| Food log write QPS | 35K × 3 ÷ 86_400 | **~1.2** | ~1 w/s |
+| AI scan submit QPS | 35K × 0.3 ÷ 86_400 | **~0.12** | ~0.1 w/s |
+| Peak recipe read | avg × ×5 evening | **~16 RPS** | burst ×5 |
+| Scan storage / year | 0.12 × 500KB × 86_400 × 365 | **~1.9 TB** | ~1.9 TB/yr |
+| GET /recipes p99 | cache hit ~30 ms / SSD ~120 ms | **≤ 200 ms** | p99 ≤ 200 ms |
+| POST /scans E2E p99 | async inference 3–8 s | **≤ 8 s** | scan ≤ 8 s |
+| API uptime | product | **99.9%** | 99.9% |
+| Billing RPO | no double grant | **≈ 0** | RPO ≈ 0 |
 
-**Драйвер:** FR-3 — **AI cost + p99 job latency** (~3–8 s inference); FR-5 — **billing correctness** (duplicate webhook = revenue leak + support).
+**Драйвер:** FR-3 — **AI cost + p99 job latency**; FR-5 — **billing correctness**.
 
-### 2.3 SLA / SLO
+### 2.2 Pillars + вывод
 
-| Метрика | Цель |
-|---------|------|
-| GET /recipes p50 / p99 | ~40 ms / **≤ 200 ms** |
-| POST /food-logs p99 | **≤ 300 ms** |
-| POST /scans → poll result p99 | **≤ 8 s** E2E |
-| Billing webhook verify p99 | **≤ 500 ms** (sync leg) |
-| API uptime | **99.9%** |
-| Billing entitlement RPO | **≈ 0** (no double grant / no lost premium) |
+| ID | Pillar | Что спросят | На доске | типично для |
+|----|--------|-------------|----------|-------------|
+| O1 | Availability | async repl HA | ✅ | — |
+| O2 | Continuity | rolling deploy | ✅ | — |
+| O3 | DR | warm tier | ✅ | mobile billing |
+| S1 | Scalability | scan photos 1.9 TB | ✅ | — |
+| S2 | Consistency | strong food log + billing | ✅ | mobile billing |
+| X1 | Caching | recipe catalog + AI result hash | **TOP-3** | mobile BFF |
+| X2 | Processing | async scan, events, billing | **TOP-3** | mobile |
+| X3 | Observability | SLO + cost alerts | ✅ | — |
+| X4 | Security | webhook HMAC, JWT | ✅ | payments |
+| X5 | Distributed TX | billing outbox + idempotency | **TOP-3** | mobile billing |
 
-**GET /recipes breakdown:**
-
-| Этап | p50 | p99 |
-|------|-----|-----|
-| Gateway + cache hit | ~15 ms | ~30 ms |
-| PostgreSQL (cache miss) | ~25 ms | ~120 ms |
-| **Итого** | ~40 ms | **≤ 200 ms** |
-
-### 2.4 Throughput
-
-Peak recipe read ~16 RPS (×5 evening) · AI scan burst ~0.6 RPS · events ~40/s burst · headroom ×3 on API.
-
-### 2.5 Observability
-
-| Метрика | Зачем | FR |
-|---------|-------|-----|
-| `api_p99_latency_ms{route}` | mobile SLO | FR-1, FR-2 |
-| `ai_scan_job_duration_ms` | inference budget | FR-3 |
-| `ai_scan_cache_hit_rate` | cost control | FR-3 |
-| `billing_webhook_duplicate_total` | idempotency health | FR-5 |
-| `bullmq_queue_lag_seconds` | job reliability | FR-3, FR-6 |
-| `events_dropped_total` | analytics pipeline | FR-6 |
-
-### 2.6 Master Catalog — pillars
-
-| ID | Pillar | ✅ / — | Направление | Почему §2.2/FR | TOP-3? |
-|----|--------|--------|-------------|----------------|--------|
-| O1 | Availability | ✅ | async repl HA | SLA 99.9% | — |
-| O2 | Continuity | — | rolling deploy | Kanban releases | — |
-| O3 | DR | ✅ | warm tier | RPO billing ≈ 0 | — |
-| S1 | Scalability | ✅ | moderate RPS; scan photos storage | §2.2 1.9 TB | — |
-| S2 | Consistency | ✅ | strong food log + billing entitlement | FR-2, FR-5 | — |
-| X1 | Caching | ✅ | recipe catalog + AI result by hash | FR-1, FR-3 cost | **да** |
-| X2 | Processing | ✅ | async scan, events, billing grant | FR-3, FR-6 | **да** |
-| X3 | Observability | ✅ | §2.5 | SLO + cost alerts | — |
-| X4 | Security | ✅ | webhook HMAC, JWT, rate limit | FR-5, FR-3 abuse | — |
-| X5 | Distributed TX | ✅ | billing outbox + idempotency | FR-5 | **да** |
-
-### 2.7 Processing paths + DR tier
-
-| Path | Core UC | Когда | Механизм |
-|------|---------|-------|----------|
-| **Sync** | recipes, food log, plan read, webhook verify | user/store ждёт ACK | NestJS → PostgreSQL / Redis |
-| **Async** | AI scan, billing grant, analytics forward, plan regenerate | FR-3, FR-5, FR-6 | BullMQ workers |
-| **Batch** | daily aggregates, recipe search index, content translate | reports, admin | cron / ETL |
-
-**DR tier (O3):** Warm — RPO ≈ 0 на subscriptions, RTO 15 min · async repl + daily backup.
-
-### 2.8 Bottleneck → куда копать в §4
-
-**Куда копать:** AI scan cost/latency + billing idempotency → Deep Dive **§4.3** (TOP-3: X2, X5, X1 — см. §2.6)
-
-**На собесе акцент (помимо bottleneck):**
-- duplicate App Store webhook → **X5, FR-5**
-- AI inference $/scan over budget → **X1 cache by perceptual hash, resize 512px**
-- BullMQ stuck jobs / lost events → **X2 retry + DLQ**
-- recipe list slow on mobile → **X1 cache-aside** (второй блок §4.2)
+**Вывод:** AI scan cost/latency + billing idempotency → **§4.3** · **TOP-3:** X2 · X5 · X1
 
 ---
 
@@ -241,10 +190,10 @@ sequenceDiagram
 |--------|---------------|
 | Billing/webhook idempotency refactor | FR-5, §4.3 outbox |
 | Event pipeline + A/B | FR-6, FR-9, §4.3 |
-| Mobile API latency | §2.3, §4.2 |
+| Mobile API latency | §2.1, §4.2 |
 | AI food recognition pipeline | FR-3, §3 sequence, §4.3 |
-| Background jobs reliability | §2.5, §4.3 DLQ |
-| Monitoring / alerting | §2.5, infra sizing |
+| Background jobs reliability | §4.3 DLQ |
+| Monitoring / alerting | §4 pull, infra sizing |
 
 ### §4.3 Async pipelines *(образец — единственный блок на доске)*
 
@@ -292,11 +241,11 @@ sequenceDiagram
 
 | Компонент | Тех | Размер | Откуда |
 |-----------|-----|--------|--------|
-| API | NestJS, 3–5 pods | ~50 RPS headroom | §2.2 peak ×3 |
-| PostgreSQL | primary + replica | ~80 GB + 1.9 TB photos ext | §2.2 |
+| API | NestJS, 3–5 pods | ~50 RPS headroom | §2.1 peak ×3 |
+| PostgreSQL | primary + replica | ~80 GB + 1.9 TB photos ext | §2.1 |
 | Redis | cache + BullMQ | 4 GB cache, queue | hot recipes + jobs |
-| Object storage | S3-compatible | ~2 TB/year scans | §2.2 |
-| AI worker | 2–4 workers | ~10.5K jobs/day | §2.2 |
+| Object storage | S3-compatible | ~2 TB/year scans | §2.1 |
+| AI worker | 2–4 workers | ~10.5K jobs/day | §2.1 |
 | Vision API | external | budget cap/scan | inference KPI |
 
 ---

@@ -9,9 +9,9 @@
 | Шаг | Время | Файл |
 |-----|-------|------|
 | 1. Requirements | 5–8 min | [Функциональные требования](workflow/01-functional-requirements.md) |
-| 2. NFR | 5–7 min на доске | [Метрики · pillars · processing/DR](workflow/02-non-functional-requirements.md) |
+| 2. NFR | 5–7 min на доске | [§2.1 цифры · §2.2 pillars + вывод](workflow/02-non-functional-requirements.md) |
 | 3. High-level design | 12–15 min | [API · schema · схема](workflow/03-high-level-design.md) |
-| 4. Deep Dive + Tech | 15–18 min | [По bottleneck из §2.8 NFR](workflow/04-deep-dive.md) |
+| 4. Deep Dive + Tech | 15–18 min | [По выводу §2.2 NFR](workflow/04-deep-dive.md) |
 
 ## Примеры
 

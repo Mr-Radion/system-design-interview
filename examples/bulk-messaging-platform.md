@@ -43,91 +43,40 @@
 
 ## 2. NFR (5–7 min)
 
-### 2.2 Расчёты
+### 2.1 Цифры на доску
 
-**Допущения:** ~1B msg/day · ~200 B2B clients · avg **~11.6K/s** · peak **~500K/s** = *3 mega-campaigns × 5M recipients in 30s overlap* · ~500 B/event · PG **last status only** · full DLR history → analytics store
+**Допущения:** ~1B msg/day · ~200 B2B clients · avg **~11.6K/s** · peak **~500K/s** = *3 mega-campaigns × 5M recipients in 30s overlap* · ~500 B/event
 
-| Метрика | Формула | Результат |
-|---------|---------|-----------|
-| Avg outbound/s | 1B ÷ 86_400 | **~11.6K/s** |
-| Peak outbound/s | 3 × 5M ÷ 30s | **~500K/s** |
-| DLR ingest peak | ~1:1 sends | **~500K/s** |
-| Message bus volume/day | 1B × ~500 B | **~500 GB/day** |
-| PG status writes peak | batched 1K rows | **~500 batches/s** (~500K rows/s effective) |
-| Analytics insert peak | buffered sink | **~500K/s** async |
-| Campaign API QPS | low hundreds | не bottleneck |
+| Вопрос | Формула / допущение | Результат | На доске |
+|--------|---------------------|-----------|----------|
+| Avg outbound/s | 1B ÷ 86_400 | **~11.6K/s** | ~12K/s avg |
+| Peak outbound/s | 3 × 5M ÷ 30s | **~500K/s** | **500K/s peak** |
+| DLR ingest peak | ~1:1 sends | **~500K/s** | 500K/s DLR |
+| Message bus volume/day | 1B × ~500 B | **~500 GB/day** | ~500 GB/day |
+| PG status writes peak | batched 1K rows | **~500K rows/s** | batched writes |
+| POST /campaigns p99 | API + SQL ~2× SSD | **≤ 500 ms** | p99 ≤ 500 ms |
+| DLR ACK p99 sync | HMAC + dedup + produce ~13 ms p50 | **≤ 50 ms** | ACK ≤ 50 ms |
+| Platform uptime | product | **99.95%** | 99.95% |
+| Credits RPO | CP invariant | **≈ 0** | RPO ≈ 0 |
 
 **Драйвер:** FR-3 + FR-4 — **dispatch throughput + DLR flood** at 500K/s peak.
 
-### 2.3 SLA / SLO
+### 2.2 Pillars + вывод
 
-| Метрика | Цель |
-|---------|------|
-| POST /campaigns p99 | **≤ 500 ms** |
-| POST /webhooks/dlr p99 sync leg | **≤ 50 ms** (fast ACK) |
-| Dispatcher lag p99 at peak | **≤ 60 s** |
-| DLR async lag p99 | **≤ 5 s** |
-| Platform uptime | **99.95%** |
-| Credits RPO | **≈ 0** |
+| ID | Pillar | Что спросят | На доске | типично для |
+|----|--------|-------------|----------|-------------|
+| O1 | Availability | multi-AZ, repl HA | ✅ | — |
+| O2 | Continuity | — | — | — |
+| O3 | DR | warm tier | ✅ | messaging |
+| S1 | Scalability | 500K/s peak, partitions | **TOP-3** | messaging |
+| S2 | Consistency | credits CP; DLR eventual | ✅ | messaging |
+| X1 | Caching | template multi-level | ✅ | — |
+| X2 | Processing | dispatch + DLR pipeline | **TOP-3** | messaging |
+| X3 | Observability | SLO + lag alerts | ✅ | — |
+| X4 | Security | webhook HMAC, API keys | ✅ | webhooks |
+| X5 | Distributed TX | outbox, DLR dedup, credits | **TOP-3** | messaging |
 
-**POST /webhooks/{provider}/dlr breakdown (sync leg):**
-
-| Этап | p50 | p99 |
-|------|-----|-----|
-| Gateway + HMAC verify | ~5 ms | ~15 ms |
-| Dedup check | ~3 ms | ~20 ms |
-| Produce to message bus | ~5 ms | ~25 ms |
-| **Итого ACK** | ~13 ms | **≤ 50 ms** |
-
-### 2.4 Throughput
-
-Avg ~11.6K/s · peak **500K/s** (§2.2 mega-campaign overlap) · evening burst ×2 · headroom ×2 on dispatch consumers.
-
-### 2.5 Observability
-
-| Метрика | Зачем | FR |
-|---------|-------|-----|
-| `dispatcher_lag_seconds` | dispatch backlog | FR-3 |
-| `dlr_consumer_lag` | DLR pipeline health | FR-4 |
-| `provider_error_rate{channel}` | fallback trigger | FR-3 |
-| `analytics_insert_lag` | report freshness | FR-5 |
-| `credits_balance_drift` | CP credits invariant | FR-6 |
-
-### 2.6 Master Catalog — pillars
-
-| ID | Pillar | ✅ / — | Направление | Почему §2.2/FR | TOP-3? |
-|----|--------|--------|-------------|----------------|--------|
-| O1 | Availability | ✅ | multi-AZ, repl HA | SLA 99.95% | — |
-| O2 | Continuity | — | rolling deploy | частые релизы | — |
-| O3 | DR | ✅ | warm tier | credits RPO ≈ 0 | — |
-| S1 | Scalability | ✅ | 500K/s peak, partitions | §2.2 | **да** |
-| S2 | Consistency | ✅ | credits CP; DLR eventual | FR-6, FR-4 | — |
-| X1 | Caching | ✅ | template multi-level | FR-2 | — |
-| X2 | Processing | ✅ | dispatch + DLR pipeline | FR-3, FR-4 | **да** |
-| X3 | Observability | ✅ | §2.5 | SLO + lag alerts | — |
-| X4 | Security | ✅ | webhook HMAC, API keys | FR-4 | — |
-| X5 | Distributed TX | ✅ | outbox, DLR dedup, credits | FR-4, FR-6 | **да** |
-
-### 2.7 Processing paths + DR tier
-
-| Path | Core UC | Когда | Механизм |
-|------|---------|-------|----------|
-| **Sync** | create campaign, webhook ACK, credits reserve | client/provider ждёт | API → SQL DB |
-| **Async** | dispatch, DLR process, stats to analytics | FR-3, FR-4 | message bus workers |
-| **Batch** | billing reports, audience import validate | nightly / pre-send | cron / ETL |
-
-**DR tier (O3):** Warm — RPO ≈ 0 на credits + campaign state, RTO 15 min · async repl + daily backup.
-
-### 2.8 Bottleneck → куда копать в §4
-
-**Куда копать:** peak dispatch 500K/s + DLR flood → Deep Dive **§4.3** (TOP-3: X2, S1, X5 — см. §2.6)
-
-**На собесе акцент (помимо bottleneck):**
-- duplicate DLR webhook → **X5, FR-4**
-- partition key `hash(recipient)` vs `campaign_id` → **S1**
-- PG last status only; full DLR history → analytics store
-- PG batch upsert vs 500K/s raw single-row writes
-- template cache L1 / Memcached / Redis → **X1** (второй блок §4.2)
+**Вывод:** peak dispatch 500K/s + DLR flood → **§4.3** · **TOP-3:** X2 · S1 · X5
 
 ---
 
@@ -277,10 +226,10 @@ sequenceDiagram
 
 | Компонент | Тех | Размер | Откуда |
 |-----------|-----|--------|--------|
-| Message bus | Kafka cluster | 20–50 brokers, ~1K partitions | §2.2 peak |
+| Message bus | Kafka cluster | 20–50 brokers, ~1K partitions | §2.1 peak |
 | Dispatcher | K8s HPA | scale on `dispatcher_lag_seconds` | 500K/s |
-| SQL DB | PostgreSQL partitioned | messages by month, 90d hot | §2.2 |
-| Analytics store | ClickHouse 3-node | TTL 2y funnel | §2.2 |
+| SQL DB | PostgreSQL partitioned | messages by month, 90d hot | §2.1 |
+| Analytics store | ClickHouse 3-node | TTL 2y funnel | §2.1 |
 | Cache | Redis + Memcached | templates + rate limits | FR-2, FR-8 |
 
 ---

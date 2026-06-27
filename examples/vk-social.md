@@ -31,70 +31,41 @@
 
 ## 2. NFR (5–7 min)
 
-### 2.2 Расчёты
+### 2.1 Цифры на доску
 
 **Допущения:** 80M DAU · messages retention 5 лет · friends + feed + messages + media
 
-| Метрика | Формула | Результат |
-|---------|---------|-----------|
-| DAU | — | **80M** |
-| Message write QPS | 80M × 20 ÷ 86_400 | **~18_500** |
-| Post write QPS | 80M × 0.3 ÷ 86_400 | **~280** |
-| Feed read QPS | 80M × 8 ÷ 86_400 | **~7_400** |
-| Messages storage 5y | volume × retention | **~580 TB** |
+| Вопрос | Формула / допущение | Результат | На доске |
+|--------|---------------------|-----------|----------|
+| DAU | — | **80M** | 80M DAU |
+| Message write QPS | 80M × 20 ÷ 86_400 | **~18_500** | ~18.5K w/s |
+| Post write QPS | 80M × 0.3 ÷ 86_400 | **~280** | ~280 w/s |
+| Feed read QPS | 80M × 8 ÷ 86_400 | **~7_400** | ~7.4K r/s |
+| Messages storage 5y | volume × retention | **~580 TB** | ~580 TB |
+| Peak messages | avg × burst ×3 holidays | **~55K w/s** | burst ×3 |
+| Send message p99 | 2× SSD + DC ~0.5 ms | **≤ 500 ms** | p99 ≤ 500 ms |
+| Feed page p99 | cache hit + SSD | **≤ 1 s** | p99 ≤ 1 s |
+| SLA uptime | product | **99.95%** | 99.95% |
+| RPO / RTO | messages | мин · **< 30 min** | RPO мин · RTO 30m |
 
 **Драйвер:** FR-5/FR-6 — message store sharding first.
 
-### 2.3 SLA / SLO
+### 2.2 Pillars + вывод
 
-| Метрика | Цель |
-|---------|------|
-| Send message p99 | **≤ 500 ms** |
-| Feed page p99 | **≤ 1 s** |
-| Push delivery p95 | **≤ 2 s** |
-| SLA uptime | **99.95%** |
-| RPO messages | минуты · RTO **< 30 min** |
+| ID | Pillar | Что спросят | На доске | типично для |
+|----|--------|-------------|----------|-------------|
+| O1 | Availability | async RF=3 — HA | ✅ | — |
+| O2 | Continuity | — | — | — |
+| O3 | DR | warm tier | **TOP-3** | write-heavy |
+| S1 | Scalability | messages 18.5K w/s, 580 TB | **TOP-3** | write-heavy |
+| S2 | Consistency | strong graph / eventual feed | ✅ | write-heavy |
+| X1 | Caching | cache-aside feed | ✅ | read-heavy |
+| X2 | Processing | sync ACK + async push/fan-out | **TOP-3** | write-heavy |
+| X3 | Observability | hot dialog alert | ✅ | — |
+| X4 | Security | — | — | — |
+| X5 | Distributed TX | — | — | CP/money |
 
-### 2.4 Throughput
-
-Peak message **~18.5K w/s** · feed read **~7.4K r/s** · burst ×3 holidays.
-
-### 2.5 Observability
-
-| Метрика | Зачем |
-|---------|-------|
-| `message_send_p99_ms` | sync ACK SLO |
-| `dialog_shard_write_rate` | hot dialog |
-| `message_queue_lag_seconds` | push delay |
-
-### 2.6 Master Catalog — pillars
-
-| ID | Pillar | ✅ / — | Направление | Почему §2.2/FR | TOP-3? |
-|----|--------|--------|-------------|----------------|--------|
-| O1 | Availability | ✅ | async RF=3 — HA | SLA 99.95% | — |
-| O2 | Continuity | — | — | не спрашивали | — |
-| O3 | DR | ✅ | warm tier | RPO мин, RTO 30 min | **да** |
-| S1 | Scalability | ✅ | messages 18.5K w/s, 580 TB | §2.2 | **да** |
-| S2 | Consistency | ✅ | strong graph / eventual feed | FR-1, FR-2 | — |
-| X1 | Caching | ✅ | cache-aside feed | 7.4K r/s read | — |
-| X2 | Processing | ✅ | sync ACK + async push/fan-out | FR-3, FR-2 | **да** |
-| X3 | Observability | ✅ | §2.5 metrics | hot dialog alert | — |
-| X4 | Security | — | — | out of scope | — |
-| X5 | Distributed TX | — | — | no cross-shard money | — |
-
-### 2.7 Processing paths + DR tier
-
-| Path | Core UC | Когда | Механизм |
-|------|---------|-------|----------|
-| **Sync** | POST message, GET feed | user ждёт ACK | API → shard / cache |
-| **Async** | push delivery, post fan-out | FR-3, FR-2 | push channel + message bus |
-| **Batch** | archive after 5y TTL | FR-5 retention | cron / cold storage |
-
-**DR tier (O3):** Warm — RPO минуты, RTO 30 min · async repl RF=3.
-
-### 2.8 Bottleneck → куда копать в §4
-
-**Куда копать:** message write 18.5K w/s + 580 TB → Deep Dive **§4.2** (TOP-3: S1, O3, X2 — см. §2.6)
+**Вывод:** message write 18.5K w/s + 580 TB → **§4.2** · **TOP-3:** S1 · O3 · X2
 
 ---
 
@@ -169,11 +140,11 @@ Scylla append-only TTL 5y · hash(`dialog_id`) · PG social graph · async RF=3.
 
 | Компонент | Тех | Размер | Откуда |
 |-----------|-----|--------|--------|
-| Message store | Scylla 6 nodes | ~580 TB+ | §2.2 retention |
+| Message store | Scylla 6 nodes | ~580 TB+ | §2.1 retention |
 | Social DB | PG 4 shards | profiles, follows | low post w/s |
-| Broker | Kafka | fan-out | §2.2 post w/s |
-| Cache | Redis | feed hot users | §2.2 feed read |
-| API | K8s | ~25K combined RPS | §2.2 total QPS |
+| Broker | Kafka | fan-out | §2.1 post w/s |
+| Cache | Redis | feed hot users | §2.1 feed read |
+| API | K8s | ~25K combined RPS | §2.1 total QPS |
 
 ---
 
