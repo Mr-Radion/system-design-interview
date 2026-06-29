@@ -10,18 +10,20 @@
 
 ## 2.1 Цифры на доску
 
+**Расшифровки параметров:** [GLOSSARY §2.1](GLOSSARY.md#step2-metrics) · [NFR / SLA / SLO](GLOSSARY.md#nfr)
+
 Сначала **спроси интервьюера** (если молчит — назови допущение вслух и запиши в таблицу):
 
 | Вопрос | Зачем |
 |--------|-------|
-| **Scale?** DAU / MAU / CCU / registered? | вход для RPS |
-| **Geo?** single region / multi-region? | CDN, repl, latency |
-| **Read vs write?** ratio, hot path? | bottleneck |
-| **Consistency?** money / social / stale OK? | CAP, RPO |
-| **Latency?** p99 target на sync path? | SLO |
-| **Retention?** how long store data? | storage / year |
-| **Peak vs average?** burst events? | headroom в QPS |
-| **SLA / RPO / RTO?** CP или eventual OK? | DR pillar |
+| **Scale?** [DAU](GLOSSARY.md#dau) / [MAU](GLOSSARY.md#mau) / [CCU](GLOSSARY.md#ccu) / registered? | посчитать [QPS](GLOSSARY.md#qps) — сколько запросов/сек |
+| **Geo?** single region / multi-region? | нужен ли CDN, [repl](GLOSSARY.md#repl), cross-region latency |
+| **Read vs write?** ratio, [hot path](GLOSSARY.md#hot-path)? | найти [bottleneck](GLOSSARY.md#bottleneck) — что сломается первым |
+| **Consistency?** money / social / stale OK? | strong vs eventual, [RPO](GLOSSARY.md#rpo) |
+| **Latency?** [p99](GLOSSARY.md#p99) target на [sync path](GLOSSARY.md#sync-path)? | [SLO](GLOSSARY.md#slo) — цель задержки для UX |
+| **Retention?** how long store data? | [storage / year](GLOSSARY.md#formulas) — объём диска |
+| **Peak vs average?** burst events? | [headroom](GLOSSARY.md#headroom) в QPS — запас на пик |
+| **SLA / RPO / RTO?** CP или eventual OK? | [SLA](GLOSSARY.md#sla) uptime + DR tier ([RPO](GLOSSARY.md#rpo) / [RTO](GLOSSARY.md#rto)) |
 | **Existing constraints?** stack, compliance? | pull → §4 |
 
 | Вопрос | Формула / допущение | Результат | На доске |
